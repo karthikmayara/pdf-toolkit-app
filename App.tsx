@@ -19,7 +19,7 @@ const RELEASE_NOTES = {
     'Critical Fix: Service Worker Installation',
     'Resolved CORS errors for Offline Mode',
     'Optimized App Icon Caching',
-    'Improved Startup Speed'
+    'Improved Startup Speed',
     'Minor UI Enhancements'
   ]
 };
