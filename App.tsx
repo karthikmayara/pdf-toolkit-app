@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useRef } from 'react';
 import CompressTool from './components/CompressTool';
 import ImageConverterTool from './components/ImageConverterTool';
@@ -14,30 +15,28 @@ import UpdateNotification from './components/UpdateNotification';
 type ToolType = 'compress' | 'convert' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'numbers' | 'rotate' | 'ocr' | null;
 
 const RELEASE_NOTES = {
-  version: 'v2.8.6',
+  version: 'v2.8.7',
   notes: [
-    'Fixed update notification vanishing issue',
-    'New "Quality Check" in Compress Tool',
-    'Improved compression stability on mobile',
-    'Reduced memory usage for large files',
-    'added safeguards against corrupted PDFs',
-    'added comparision slider'
+    '🚀 Gold Master Release',
+    'New "Supreme" Sign Tool with Asset Library',
+    'Added visual Quality Check sliders',
+    'Enhanced offline reliability & memory safety'
   ]
 };
 
 const getToolDetails = (id: ToolType) => {
   switch(id) {
-    case 'compress': return { name: 'Compress PDF', icon: '📦' };
-    case 'merge': return { name: 'Merge PDFs', icon: '📑' };
-    case 'split': return { name: 'Split PDF', icon: '✂️' };
-    case 'convert': return { name: 'Image Converter', icon: '🔄' };
-    case 'sign': return { name: 'Sign PDF', icon: '✍️' };
-    case 'ocr': return { name: 'Image OCR', icon: '🔍' };
-    case 'watermark': return { name: 'Watermark', icon: '🛡️' };
-    case 'optimize': return { name: 'Optimize Image', icon: '📉' };
-    case 'numbers': return { name: 'Page Numbers', icon: '🔢' };
-    case 'rotate': return { name: 'Rotate', icon: '↻' };
-    default: return { name: '', icon: '' };
+    case 'compress': return { name: 'Compress PDF', icon: '📦', desc: 'Smart reduction' };
+    case 'merge': return { name: 'Merge PDFs', icon: '📑', desc: 'Combine files' };
+    case 'split': return { name: 'Split PDF', icon: '✂️', desc: 'Extract pages' };
+    case 'convert': return { name: 'Image Converter', icon: '🔄', desc: 'PDF ↔ IMG' };
+    case 'sign': return { name: 'Sign PDF', icon: '✍️', desc: 'Digital signature' };
+    case 'ocr': return { name: 'Image OCR', icon: '🔍', desc: 'Extract text' };
+    case 'watermark': return { name: 'Watermark', icon: '🛡️', desc: 'Add stamp' };
+    case 'optimize': return { name: 'Optimize Image', icon: '📉', desc: 'Compress IMG' };
+    case 'numbers': return { name: 'Page Numbers', icon: '🔢', desc: 'Add numbering' };
+    case 'rotate': return { name: 'Rotate', icon: '↻', desc: 'Fix orientation' };
+    default: return { name: '', icon: '', desc: '' };
   }
 };
 
@@ -95,6 +94,7 @@ export default function App() {
   const navigateToTool = (toolId: ToolType) => {
     setActiveTool(toolId);
     if (toolId) window.history.pushState({ tool: toolId }, '', `#${toolId}`);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const navigateHome = () => {
@@ -112,7 +112,7 @@ export default function App() {
     }
   };
 
-  // 4. Service Worker - FIXED REGISTRATION LOGIC
+  // 4. Service Worker
   useEffect(() => {
     if (swInitialized.current) return;
     swInitialized.current = true;
@@ -171,85 +171,82 @@ export default function App() {
     }
   };
 
-  const ToolCard = ({ title, desc, icon, colorClass, onClick, delayClass = "" }: any) => (
+  const ToolCard = ({ title, desc, icon, onClick, delayClass = "" }: any) => (
     <button
       onClick={onClick}
-      className={`group relative flex flex-col items-center justify-center p-6 bg-white/60 dark:bg-slate-800/60 backdrop-blur-md border border-white/50 dark:border-slate-700 rounded-3xl shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 text-center animate-fade-in-up ${delayClass}`}
+      className={`group relative flex flex-col items-start justify-between p-6 h-full min-h-[180px] bg-white/40 dark:bg-white/5 backdrop-blur-md border border-white/50 dark:border-white/10 hover:border-indigo-500/50 dark:hover:border-indigo-400/50 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 text-left animate-fade-in-up ${delayClass}`}
     >
-      <div className={`mb-4 w-16 h-16 rounded-2xl flex items-center justify-center text-3xl shadow-sm group-hover:scale-110 transition-transform duration-300 ${colorClass}`}>
-        {icon}
+      <div className="flex justify-between w-full mb-4">
+        <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl bg-white/80 dark:bg-white/10 shadow-sm group-hover:scale-110 transition-transform duration-300">
+          {icon}
+        </div>
+        <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+            <svg className="w-6 h-6 text-indigo-600 dark:text-indigo-400 -rotate-45" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+        </div>
       </div>
-      <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-2">{title}</h3>
-      <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed px-2">{desc}</p>
+      <div>
+        <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{title}</h3>
+        <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 opacity-80">{desc}</p>
+      </div>
     </button>
   );
 
   const currentToolDetails = activeTool ? getToolDetails(activeTool) : null;
 
   return (
-    <div className="min-h-screen transition-colors duration-300 pb-24 font-sans">
+    <div className="min-h-screen transition-colors duration-300 font-montserrat overflow-x-hidden">
       
-      {/* Sticky Glass Header */}
-      <header className="sticky top-0 z-40 w-full backdrop-blur-xl bg-white/70 dark:bg-slate-900/80 border-b border-white/20 dark:border-slate-800 shadow-sm transition-all duration-300">
-        <div className="max-w-7xl mx-auto px-4 h-16 sm:h-20 flex items-center justify-between">
+      {/* LUMINA-STYLE HEADER */}
+      <header className="fixed top-0 z-50 w-full backdrop-blur-xl bg-white/10 dark:bg-[#0b0f19]/70 border-b border-white/20 dark:border-white/5 shadow-lg shadow-black/5 transition-all duration-300">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 sm:h-24 flex items-center justify-between">
             
-            <div className="flex items-center gap-3">
-              {activeTool && currentToolDetails ? (
-                <div className="flex items-center gap-2 sm:gap-4 animate-fade-in">
-                   <button 
-                      onClick={navigateHome}
-                      className="group flex items-center gap-2 px-3 py-2 -ml-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                   >
-                      <div className="w-8 h-8 rounded-full bg-white dark:bg-slate-700 shadow-sm border border-slate-200 dark:border-slate-600 flex items-center justify-center group-hover:-translate-x-1 transition-transform">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7"></path></svg>
-                      </div>
-                      <span className="font-bold text-sm hidden sm:inline">Home</span>
-                   </button>
-                   <div className="h-6 w-px bg-slate-300 dark:bg-slate-700 hidden sm:block"></div>
-                   <div className="flex items-center gap-2">
-                      <span className="text-2xl">{currentToolDetails.icon}</span>
-                      <h1 className="text-lg font-extrabold text-slate-800 dark:text-white tracking-tight">{currentToolDetails.name}</h1>
-                   </div>
+            <div className="flex items-center gap-6">
+              <div 
+                className="flex items-center gap-3 cursor-pointer group" 
+                onClick={navigateHome}
+              >
+                {/* Logo */}
+                <div className="relative">
+                    <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-cyan-500 rounded-lg blur opacity-40 group-hover:opacity-75 transition duration-500"></div>
+                    <img 
+                      src="./icon.svg" 
+                      className="relative w-10 h-10 sm:w-12 sm:h-12 rounded-lg shadow-2xl" 
+                      alt="Logo" 
+                    />
                 </div>
-              ) : (
-                <div className="flex items-center gap-3 cursor-pointer group" onClick={navigateHome}>
-                  {/* PWA Logo - Uses the cached icon if available */}
-                  <img 
-                    src="./icons/icon-192.png" 
-                    onError={(e) => {
-                        // Fallback to emoji if png is missing
-                        e.currentTarget.style.display = 'none';
-                        e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                    }}
-                    className="w-10 h-10 rounded-xl shadow-lg group-hover:rotate-6 transition-transform duration-300" 
-                    alt="Logo" 
-                  />
-                  <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg flex items-center justify-center text-white text-xl font-bold hidden">
-                     P
-                  </div>
-                  <div className="hidden sm:block">
-                    <h1 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-none">
-                      PDF Toolkit <span className="text-indigo-600 dark:text-indigo-400">Pro</span>
-                    </h1>
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest opacity-80">Offline Suite</p>
-                  </div>
+                
+                {/* Brand Text */}
+                <div className="hidden sm:block">
+                  <h1 className="text-xl font-black text-slate-900 dark:text-white tracking-tighter leading-none">
+                    LUMINA <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-cyan-500">PDF</span>
+                  </h1>
+                  <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em]">Pro Toolkit</p>
                 </div>
+              </div>
+
+              {/* Navigation Links (Desktop) */}
+              {activeTool && (
+                  <div className="hidden md:flex items-center gap-1 pl-6 border-l border-slate-200 dark:border-slate-800">
+                      <button onClick={navigateHome} className="text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-white transition-colors">Home</button>
+                      <span className="text-slate-300 dark:text-slate-700">/</span>
+                      <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-white">{currentToolDetails?.name}</span>
+                  </div>
               )}
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-4">
               {deferredPrompt && (
                 <button
                   onClick={handleInstallClick}
-                  className="flex items-center gap-2 px-4 py-2 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-lg hover:shadow-xl hover:scale-105 transition-all font-bold text-xs sm:text-sm animate-pop"
+                  className="hidden sm:flex px-6 py-2.5 rounded-full border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white font-bold text-xs uppercase tracking-widest hover:bg-slate-100 dark:hover:bg-white/10 transition-all"
                 >
-                  Install App
+                  Get App
                 </button>
               )}
               
               <button
                 onClick={() => setDarkMode(!darkMode)}
-                className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-yellow-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm"
+                className="w-10 h-10 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-600 dark:text-yellow-400 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors border border-transparent dark:border-white/5"
               >
                 {darkMode ? 
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg> 
@@ -261,34 +258,77 @@ export default function App() {
         </div>
       </header>
       
-      <main className="max-w-7xl mx-auto px-4 pt-8 sm:pt-12">
+      {/* MAIN CONTENT */}
+      <main className="pt-20 sm:pt-24 min-h-screen flex flex-col">
         {!activeTool ? (
-          <div className="space-y-12">
-            <div className="text-center max-w-2xl mx-auto animate-fade-in space-y-4">
-               <h2 className="text-4xl sm:text-5xl font-extrabold text-slate-800 dark:text-white tracking-tight">
-                 All your PDF tools, <br/>
-                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 dark:from-indigo-400 dark:to-purple-400">offline & secure.</span>
-               </h2>
-               <p className="text-slate-600 dark:text-slate-300 text-lg leading-relaxed">
-                 Process documents directly in your browser. No uploads, no waiting, 100% private.
-               </p>
+          <>
+            {/* HERO SECTION - "LUMINA" STYLE */}
+            <div className="relative w-full overflow-hidden bg-slate-50 dark:bg-[#0b0f19] py-16 sm:py-24 lg:py-32">
+                {/* Background Blobs */}
+                <div className="absolute top-0 left-1/4 w-96 h-96 bg-indigo-500/20 rounded-full blur-[100px] pointer-events-none"></div>
+                <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-cyan-500/20 rounded-full blur-[100px] pointer-events-none"></div>
+
+                <div className="max-w-7xl mx-auto px-4 relative z-10 text-center space-y-6">
+                    <div className="inline-block animate-fade-in-up">
+                        <span className="px-3 py-1 rounded-full border border-indigo-500/30 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 text-[10px] font-bold uppercase tracking-[0.2em] backdrop-blur-sm">
+                            v2.8 Gold Master
+                        </span>
+                    </div>
+                    
+                    <h2 className="text-5xl sm:text-7xl md:text-8xl font-black tracking-tighter text-slate-900 dark:text-white leading-[0.9] animate-fade-in-up delay-100">
+                        PRIVACY <br className="sm:hidden" />
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-500 animate-gradient-x">FIRST</span>
+                    </h2>
+                    
+                    <p className="max-w-2xl mx-auto text-lg sm:text-xl text-slate-600 dark:text-slate-400 font-medium leading-relaxed animate-fade-in-up delay-200">
+                        The ultimate offline PDF manipulation suite. <br/>
+                        Process documents directly in your browser. Zero uploads.
+                    </p>
+                </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
-              <ToolCard title="Compress PDF" desc="Smart reduction" icon="📦" colorClass="bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-300" onClick={() => navigateToTool('compress')} delayClass="stagger-1" />
-              <ToolCard title="Merge PDFs" desc="Combine files" icon="📑" colorClass="bg-purple-100 text-purple-600 dark:bg-purple-900/40 dark:text-purple-300" onClick={() => navigateToTool('merge')} delayClass="stagger-2" />
-              <ToolCard title="Split PDF" desc="Extract pages" icon="✂️" colorClass="bg-orange-100 text-orange-600 dark:bg-orange-900/40 dark:text-orange-300" onClick={() => navigateToTool('split')} delayClass="stagger-3" />
-              <ToolCard title="Convert Images" desc="PDF ↔ IMG" icon="🔄" colorClass="bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300" onClick={() => navigateToTool('convert')} delayClass="stagger-4" />
-              <ToolCard title="Sign PDF" desc="Digital signature" icon="✍️" colorClass="bg-indigo-100 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-300" onClick={() => navigateToTool('sign')} delayClass="stagger-5" />
-              <ToolCard title="Image OCR" desc="Extract text" icon="🔍" colorClass="bg-pink-100 text-pink-600 dark:bg-pink-900/40 dark:text-pink-300" onClick={() => navigateToTool('ocr')} delayClass="stagger-6" />
-              <ToolCard title="Watermark" desc="Add stamp" icon="🛡️" colorClass="bg-cyan-100 text-cyan-600 dark:bg-cyan-900/40 dark:text-cyan-300" onClick={() => navigateToTool('watermark')} delayClass="stagger-7" />
-              <ToolCard title="Optimize Image" desc="Compress IMG" icon="📉" colorClass="bg-teal-100 text-teal-600 dark:bg-teal-900/40 dark:text-teal-300" onClick={() => navigateToTool('optimize')} delayClass="stagger-8" />
-              <ToolCard title="Page Numbers" desc="Add numbering" icon="🔢" colorClass="bg-sky-100 text-sky-600 dark:bg-sky-900/40 dark:text-sky-300" onClick={() => navigateToTool('numbers')} delayClass="stagger-9" />
-              <ToolCard title="Rotate" desc="Fix orientation" icon="↻" colorClass="bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-300" onClick={() => navigateToTool('rotate')} delayClass="stagger-10" />
+            {/* MARQUEE STRIP */}
+            <div className="w-full bg-slate-900 dark:bg-white text-white dark:text-black py-3 sm:py-4 overflow-hidden relative z-20 shadow-xl rotate-1 sm:-rotate-1 scale-105 transform origin-center border-y-4 border-indigo-500">
+                <div className="flex animate-marquee whitespace-nowrap">
+                    {[1,2,3,4,5,6].map(i => (
+                        <div key={i} className="flex items-center gap-8 mx-4">
+                            <span className="text-sm sm:text-lg font-black uppercase tracking-widest">Offline Processing</span>
+                            <span className="text-indigo-400 dark:text-indigo-600">★</span>
+                            <span className="text-sm sm:text-lg font-black uppercase tracking-widest">100% Private</span>
+                            <span className="text-indigo-400 dark:text-indigo-600">★</span>
+                            <span className="text-sm sm:text-lg font-black uppercase tracking-widest">Instant Results</span>
+                            <span className="text-indigo-400 dark:text-indigo-600">★</span>
+                        </div>
+                    ))}
+                </div>
             </div>
-          </div>
+
+            {/* TOOL GRID */}
+            <div className="max-w-7xl mx-auto px-4 py-16 sm:py-24">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+                    <ToolCard title="Compress PDF" desc="Smart Reduction" icon="📦" onClick={() => navigateToTool('compress')} delayClass="delay-[50ms]" />
+                    <ToolCard title="Merge PDFs" desc="Combine Files" icon="📑" onClick={() => navigateToTool('merge')} delayClass="delay-[100ms]" />
+                    <ToolCard title="Split PDF" desc="Extract Pages" icon="✂️" onClick={() => navigateToTool('split')} delayClass="delay-[150ms]" />
+                    <ToolCard title="Convert Images" desc="PDF ↔ IMG" icon="🔄" onClick={() => navigateToTool('convert')} delayClass="delay-[200ms]" />
+                    <ToolCard title="Sign PDF" desc="Digital Ink" icon="✍️" onClick={() => navigateToTool('sign')} delayClass="delay-[250ms]" />
+                    <ToolCard title="Image OCR" desc="Text Extract" icon="🔍" onClick={() => navigateToTool('ocr')} delayClass="delay-[300ms]" />
+                    <ToolCard title="Watermark" desc="Stamp & Protect" icon="🛡️" onClick={() => navigateToTool('watermark')} delayClass="delay-[350ms]" />
+                    <ToolCard title="Optimize Image" desc="Web Ready" icon="📉" onClick={() => navigateToTool('optimize')} delayClass="delay-[400ms]" />
+                    <ToolCard title="Page Numbers" desc="Pagination" icon="🔢" onClick={() => navigateToTool('numbers')} delayClass="delay-[450ms]" />
+                    <ToolCard title="Rotate" desc="Orientation" icon="↻" onClick={() => navigateToTool('rotate')} delayClass="delay-[500ms]" />
+                </div>
+            </div>
+          </>
         ) : (
-          <div className="animate-fade-in-up pb-10">
+          <div className="max-w-7xl mx-auto w-full px-4 py-8 animate-fade-in-up">
+            {/* Tool Header (Mobile Back) */}
+            <div className="md:hidden mb-6">
+                <button onClick={navigateHome} className="flex items-center gap-2 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white font-bold uppercase text-xs tracking-widest">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
+                    Back to Hub
+                </button>
+            </div>
+
             {activeTool === 'compress' && <CompressTool />}
             {activeTool === 'convert' && <ImageConverterTool />}
             {activeTool === 'merge' && <MergeTool />}
@@ -303,9 +343,17 @@ export default function App() {
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="max-w-7xl mx-auto px-4 py-8 text-center border-t border-slate-200 dark:border-slate-800 mt-12">
-          <p className="text-slate-400 text-xs">© 2024 PDF Toolkit Pro. Offline & Secure.</p>
+      {/* FOOTER */}
+      <footer className="w-full border-t border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-black/20 backdrop-blur-sm mt-auto">
+          <div className="max-w-7xl mx-auto px-4 py-12 flex flex-col md:flex-row justify-between items-center gap-6">
+              <div className="flex items-center gap-3 opacity-50 grayscale hover:grayscale-0 transition-all duration-500">
+                  <img src="./icon.svg" className="w-8 h-8 rounded-lg" alt="Footer Logo" />
+                  <span className="font-bold text-slate-900 dark:text-white tracking-widest text-xs">PDF TOOLKIT PRO</span>
+              </div>
+              <p className="text-slate-400 text-xs font-medium">
+                  © 2025 Lumina Software. Offline & Secure.
+              </p>
+          </div>
       </footer>
 
       {showUpdateNotification && (

@@ -12,13 +12,13 @@
     <link rel="manifest" href="./manifest.json" />
     
     <!-- Icons -->
-    <link rel="icon" type="image/png" href="./icons/icon-192.png" />
-    <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+    <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+    <link rel="apple-touch-icon" href="./icon.svg" />
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime&family=Dancing+Script:wght@400;700&family=Great+Vibes&family=Montserrat:wght@400;600&family=Permanent+Marker&family=Playfair+Display:ital,wght@1,400&family=Reenie+Beanie&family=Sacramento&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime&family=Dancing+Script:wght@400;700&family=Great+Vibes&family=Montserrat:wght@400;600;800;900&family=Permanent+Marker&family=Playfair+Display:ital,wght@1,400&family=Reenie+Beanie&family=Sacramento&display=swap" rel="stylesheet">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -28,20 +28,27 @@
           extend: {
             colors: {
               primary: { 50: '#eef2ff', 100: '#e0e7ff', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca' },
-              secondary: { 500: '#10b981' }
+              secondary: { 500: '#10b981' },
+              lumina: {
+                dark: '#0f172a',
+                accent: '#6366f1',
+                highlight: '#22d3ee'
+              }
             },
             animation: { 
               'spin-slow': 'spin 3s linear infinite', 
               'fade-in': 'fadeIn 0.5s ease-out forwards', 
               'fade-in-up': 'fadeInUp 0.6s ease-out forwards',
               'pop': 'pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards',
-              'float': 'float 6s ease-in-out infinite'
+              'float': 'float 6s ease-in-out infinite',
+              'marquee': 'marquee 25s linear infinite',
             },
             keyframes: {
               fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
               fadeInUp: { '0%': { opacity: '0', transform: 'translateY(20px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
               pop: { '0%': { transform: 'scale(0.95)', opacity: '0' }, '100%': { transform: 'scale(1)', opacity: '1' } },
-              float: { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-10px)' } }
+              float: { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-10px)' } },
+              marquee: { '0%': { transform: 'translateX(0%)' }, '100%': { transform: 'translateX(-100%)' } }
             },
             fontFamily: {
               'dancing': ['"Dancing Script"', 'cursive'],
@@ -71,7 +78,6 @@
     </script>
     
     <!-- Utilities -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
 <script type="importmap">
@@ -81,12 +87,13 @@
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
     "react/": "https://esm.sh/react@^19.2.3/",
     "vite": "https://esm.sh/vite@^7.3.1",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2"
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+    "fflate": "https://esm.sh/fflate@0.8.2"
   }
 }
 </script>
 </head>
-  <body class="bg-slate-50 dark:bg-slate-900 transition-colors duration-300">
+  <body class="bg-slate-50 dark:bg-[#0b0f19] transition-colors duration-300">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>
