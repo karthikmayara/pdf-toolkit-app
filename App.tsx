@@ -14,7 +14,7 @@ import UpdateNotification from './components/UpdateNotification';
 type ToolType = 'compress' | 'convert' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'numbers' | 'rotate' | 'ocr' | null;
 
 const RELEASE_NOTES = {
-  version: 'v2.8.1',
+  version: 'v2.8.2',
   notes: [
     'Fixed update notification vanishing issue',
     'New "Quality Check" in Compress Tool',

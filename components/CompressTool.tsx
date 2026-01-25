@@ -51,6 +51,12 @@ const CompressTool: React.FC = () => {
         return;
     }
 
+    // Safety check for library
+    if (!window.pdfjsLib) {
+        console.warn("PDF.js library not loaded yet.");
+        return;
+    }
+
     const generateThumb = async () => {
         try {
             const pdfjs = window.pdfjsLib;
@@ -83,6 +89,9 @@ const CompressTool: React.FC = () => {
           setCompressedThumbnailUrl(null);
           return;
       }
+
+      // Safety check for library
+      if (!window.pdfjsLib) return;
       
       const generateCompressedThumb = async () => {
         try {
@@ -157,11 +166,11 @@ const CompressTool: React.FC = () => {
   const applyPreset = (type: PresetType) => {
     setActivePreset(type);
     if (type === 'extreme') {
-        setSettings({ ...settings, mode: CompressionMode.IMAGE, quality: 0.6, maxResolution: 1200, grayscale: false });
+        setSettings(s => ({ ...s, mode: CompressionMode.IMAGE, quality: 0.6, maxResolution: 1200, grayscale: false }));
     } else if (type === 'recommended') {
-        setSettings({ ...settings, mode: CompressionMode.IMAGE, quality: 0.8, maxResolution: 2000, grayscale: false });
+        setSettings(s => ({ ...s, mode: CompressionMode.IMAGE, quality: 0.8, maxResolution: 2000, grayscale: false }));
     } else if (type === 'lossless') {
-        setSettings({ ...settings, mode: CompressionMode.STRUCTURE, quality: 1.0, maxResolution: 5000, grayscale: false });
+        setSettings(s => ({ ...s, mode: CompressionMode.STRUCTURE, quality: 1.0, maxResolution: 5000, grayscale: false }));
     }
     // Custom leaves settings alone
   };
