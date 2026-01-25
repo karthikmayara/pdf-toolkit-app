@@ -102,7 +102,7 @@ export const compressPDF = async (
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d', { willReadFrequently: true, alpha: false });
 
-      if (!ctx) throw new Error('Failed to create canvas context');
+      if (!ctx) throw new Error('Failed to create canvas context - Device memory may be low');
 
       // CRASH PREVENTION: Max canvas dimension
       // Increased to 3000px to allow higher quality while preventing OOM on mobile
@@ -201,7 +201,7 @@ export const compressPDF = async (
     } finally {
       URL.revokeObjectURL(fileUrl);
       if (loadingTask && loadingTask.destroy) {
-        loadingTask.destroy();
+        loadingTask.destroy().catch(() => {});
       }
     }
   }

@@ -51,36 +51,54 @@ const CompressTool: React.FC = () => {
         return;
     }
 
-    // Safety check for library
-    if (!window.pdfjsLib) {
-        console.warn("PDF.js library not loaded yet.");
-        return;
-    }
+    let active = true;
+    let loadingTask: any = null;
+    const objectUrl = URL.createObjectURL(file);
 
     const generateThumb = async () => {
+        // Safety check for library
+        if (!window.pdfjsLib) {
+            console.warn("PDF.js library not loaded yet.");
+            return;
+        }
+
         try {
             const pdfjs = window.pdfjsLib;
-            const url = URL.createObjectURL(file);
-            const loadingTask = pdfjs.getDocument(url);
+            loadingTask = pdfjs.getDocument(objectUrl);
             const pdf = await loadingTask.promise;
-            const page = await pdf.getPage(1);
             
+            if (!active) return;
+
+            const page = await pdf.getPage(1);
             const viewport = page.getViewport({ scale: 0.5 }); // Small scale for thumbnail
+            
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-            canvas.width = viewport.width;
-            canvas.height = viewport.height;
             
             if (ctx) {
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
                 await page.render({ canvasContext: ctx, viewport }).promise;
-                setThumbnailUrl(canvas.toDataURL());
+                
+                if (active) {
+                    setThumbnailUrl(canvas.toDataURL());
+                }
             }
-            URL.revokeObjectURL(url);
         } catch (e) {
-            console.warn("Thumbnail generation failed", e);
+            if (active) console.warn("Thumbnail generation failed", e);
         }
     };
+
     generateThumb();
+
+    // CLEANUP FUNCTION
+    return () => {
+        active = false;
+        if (loadingTask && loadingTask.destroy) {
+            loadingTask.destroy().catch(() => {}); // Prevent unhandled promise rejection during destroy
+        }
+        URL.revokeObjectURL(objectUrl);
+    };
   }, [file]);
 
   // Generate Compressed Thumbnail when result ready
@@ -90,33 +108,49 @@ const CompressTool: React.FC = () => {
           return;
       }
 
-      // Safety check for library
-      if (!window.pdfjsLib) return;
+      let active = true;
+      let loadingTask: any = null;
+      const objectUrl = URL.createObjectURL(status.resultBlob);
       
       const generateCompressedThumb = async () => {
+        if (!window.pdfjsLib) return;
+
         try {
             const pdfjs = window.pdfjsLib;
-            const url = URL.createObjectURL(status.resultBlob!);
-            const loadingTask = pdfjs.getDocument(url);
+            loadingTask = pdfjs.getDocument(objectUrl);
             const pdf = await loadingTask.promise;
-            const page = await pdf.getPage(1);
             
+            if (!active) return;
+
+            const page = await pdf.getPage(1);
             const viewport = page.getViewport({ scale: 0.5 });
+            
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-            canvas.width = viewport.width;
-            canvas.height = viewport.height;
             
             if (ctx) {
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
                 await page.render({ canvasContext: ctx, viewport }).promise;
-                setCompressedThumbnailUrl(canvas.toDataURL());
+                
+                if (active) {
+                    setCompressedThumbnailUrl(canvas.toDataURL());
+                }
             }
-            URL.revokeObjectURL(url);
         } catch (e) {
-            console.warn("Result thumbnail generation failed", e);
+            if (active) console.warn("Result thumbnail generation failed", e);
         }
       };
+
       generateCompressedThumb();
+
+      return () => {
+          active = false;
+          if (loadingTask && loadingTask.destroy) {
+              loadingTask.destroy().catch(() => {});
+          }
+          URL.revokeObjectURL(objectUrl);
+      };
   }, [status.resultBlob]);
 
   const resetState = () => {
