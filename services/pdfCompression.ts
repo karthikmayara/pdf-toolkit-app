@@ -117,14 +117,15 @@ export const compressPDF = async (
             const unscaledViewport = page.getViewport({ scale: 1.0 });
             const maxDim = Math.max(unscaledViewport.width, unscaledViewport.height);
             
-            // Calculate scale
+            // Calculate scale based on settings
             let scale = settings.maxResolution / maxDim;
-            scale = Math.min(scale, 4.0);
-            scale = Math.max(scale, 0.2); // Allow smaller scale for huge maps
+            scale = Math.min(scale, 4.0); // Don't upscale too much
+            scale = Math.max(scale, 0.2); // Don't downscale to pixel mush
             
             let scaledViewport = page.getViewport({ scale });
 
             // SAFETY CHECK: If dimensions exceed browser limits, clamp them down
+            // This prevents the "Total Canvas Memory" crash
             if (scaledViewport.width > MAX_CANVAS_DIM || scaledViewport.height > MAX_CANVAS_DIM) {
                 const clampScale = Math.min(
                     MAX_CANVAS_DIM / scaledViewport.width,
@@ -180,12 +181,13 @@ export const compressPDF = async (
         } finally {
              if (page && page.cleanup) page.cleanup();
              
-             // Aggressive memory cleanup
+             // Aggressive memory cleanup for the canvas
              ctx.clearRect(0,0, canvas.width, canvas.height);
              canvas.width = 1; 
              canvas.height = 1;
         }
 
+        // Pause execution briefly to let UI update and GC run
         if (i % 3 === 0) await new Promise(r => setTimeout(r, 10));
       }
 

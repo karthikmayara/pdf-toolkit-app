@@ -16,7 +16,8 @@ self.addEventListener('install', (event) => {
   self.skipWaiting(); 
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      // Use map to ensure one missing file doesn't break the whole install
+      // We use map -> catch to ensure that if one local file is missing, 
+      // it doesn't crash the entire installation.
       return Promise.all(
         ASSETS_TO_CACHE.map(url => {
           return cache.add(url).catch(err => {
@@ -39,17 +40,16 @@ self.addEventListener('fetch', (event) => {
                 url.includes('fonts.gstatic');
   
   const isLocalAsset = url.includes('icons/') || 
-                       url.includes('manifest.json') ||
-                       url.includes('assets/');
+                       url.includes('manifest.json');
 
-  // Strategy: Stale-While-Revalidate
+  // Strategy: Stale-While-Revalidate for CDNs and Assets
   // This allows the app to load instantly from cache, while updating in the background.
   if (isCdn || isLocalAsset) {
     event.respondWith(
       caches.match(event.request).then((cachedResponse) => {
         // 1. Return cached response immediately if found
         if (cachedResponse) {
-            // Background update (lazy cache)
+            // Background update (lazy cache) - keep cache fresh
             fetch(event.request).then((response) => {
                 if (response && response.status === 200) {
                     const responseToCache = response.clone();
@@ -74,7 +74,7 @@ self.addEventListener('fetch', (event) => {
           });
           return response;
         }).catch(() => {
-           // Offline fallback could go here
+           // Return undefined if offline and not cached (browser handles error)
         });
       })
     );
