@@ -15,11 +15,95 @@ const formatBytes = (bytes: number, decimals = 2) => {
 
 type PresetType = 'extreme' | 'recommended' | 'lossless' | 'custom';
 
+// --- SUB-COMPONENT: COMPARISON SLIDER ---
+const ComparisonSlider = ({ original, compressed }: { original: string, compressed: string }) => {
+    const [sliderPosition, setSliderPosition] = useState(50);
+    const [isDragging, setIsDragging] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+  
+    const handleMove = (clientX: number) => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const x = clientX - rect.left;
+      const pos = Math.max(0, Math.min(100, (x / rect.width) * 100));
+      setSliderPosition(pos);
+    };
+  
+    const onMouseMove = (e: React.MouseEvent) => {
+      if (isDragging) handleMove(e.clientX);
+    };
+  
+    const onTouchMove = (e: React.TouchEvent) => {
+      if (isDragging) handleMove(e.touches[0].clientX);
+    };
+  
+    const handleInteractionStart = (clientX: number) => {
+        setIsDragging(true);
+        handleMove(clientX);
+    };
+
+    useEffect(() => {
+        const stopDrag = () => setIsDragging(false);
+        window.addEventListener('mouseup', stopDrag);
+        window.addEventListener('touchend', stopDrag);
+        return () => {
+            window.removeEventListener('mouseup', stopDrag);
+            window.removeEventListener('touchend', stopDrag);
+        };
+    }, []);
+  
+    return (
+      <div 
+        ref={containerRef}
+        className="relative w-full aspect-[3/4] sm:aspect-[4/3] max-h-[500px] select-none group cursor-ew-resize overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm bg-slate-100 dark:bg-slate-900"
+        onMouseDown={(e) => handleInteractionStart(e.clientX)}
+        onTouchStart={(e) => handleInteractionStart(e.touches[0].clientX)}
+        onMouseMove={onMouseMove}
+        onTouchMove={onTouchMove}
+      >
+        {/* Compressed Image (Background) */}
+        <img 
+            src={compressed} 
+            className="absolute inset-0 w-full h-full object-contain pointer-events-none select-none" 
+            alt="Compressed"
+        />
+        <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded pointer-events-none">
+            COMPRESSED
+        </div>
+        
+        {/* Original Image (Foreground, Clipped) */}
+        <div 
+          className="absolute inset-0 pointer-events-none select-none"
+          style={{ clipPath: `inset(0 ${100 - sliderPosition}% 0 0)` }}
+        >
+          <img 
+            src={original} 
+            className="absolute inset-0 w-full h-full object-contain" 
+            alt="Original"
+          />
+          <div className="absolute top-4 left-4 bg-indigo-600/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded">
+             ORIGINAL
+          </div>
+        </div>
+  
+        {/* Slider Handle */}
+        <div 
+            className="absolute top-0 bottom-0 w-1 bg-white cursor-ew-resize shadow-[0_0_10px_rgba(0,0,0,0.5)] z-10" 
+            style={{ left: `${sliderPosition}%` }}
+        >
+          <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-8 h-8 bg-white rounded-full shadow-xl flex items-center justify-center text-slate-400 border border-slate-200">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4"></path></svg>
+          </div>
+        </div>
+      </div>
+    );
+};
+
+// --- MAIN COMPONENT ---
 const CompressTool: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
   const [compressedThumbnailUrl, setCompressedThumbnailUrl] = useState<string | null>(null);
-  const [showOriginalInComparison, setShowOriginalInComparison] = useState(false);
   
   const [status, setStatus] = useState<ProcessStatus>({ isProcessing: false, currentStep: '', progress: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -38,9 +122,13 @@ const CompressTool: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
 
+  // Scroll to results
   useEffect(() => {
     if (status.resultBlob && resultsRef.current) {
-        resultsRef.current.scrollIntoView({ behavior: 'smooth' });
+        // Small delay to allow render
+        setTimeout(() => {
+            resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 100);
     }
   }, [status.resultBlob]);
 
@@ -56,47 +144,32 @@ const CompressTool: React.FC = () => {
     const objectUrl = URL.createObjectURL(file);
 
     const generateThumb = async () => {
-        // Safety check for library
-        if (!window.pdfjsLib) {
-            console.warn("PDF.js library not loaded yet.");
-            return;
-        }
-
+        if (!window.pdfjsLib) return;
         try {
             const pdfjs = window.pdfjsLib;
             loadingTask = pdfjs.getDocument(objectUrl);
             const pdf = await loadingTask.promise;
-            
             if (!active) return;
 
             const page = await pdf.getPage(1);
-            const viewport = page.getViewport({ scale: 0.5 }); // Small scale for thumbnail
-            
+            const viewport = page.getViewport({ scale: 1.0 }); // decent quality for slider
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-            
             if (ctx) {
                 canvas.width = viewport.width;
                 canvas.height = viewport.height;
                 await page.render({ canvasContext: ctx, viewport }).promise;
-                
-                if (active) {
-                    setThumbnailUrl(canvas.toDataURL());
-                }
+                if (active) setThumbnailUrl(canvas.toDataURL());
             }
         } catch (e) {
-            if (active) console.warn("Thumbnail generation failed", e);
+            console.warn("Thumb failed", e);
         }
     };
-
     generateThumb();
 
-    // CLEANUP FUNCTION
     return () => {
         active = false;
-        if (loadingTask && loadingTask.destroy) {
-            loadingTask.destroy().catch(() => {}); // Prevent unhandled promise rejection during destroy
-        }
+        if (loadingTask && loadingTask.destroy) loadingTask.destroy().catch(() => {});
         URL.revokeObjectURL(objectUrl);
     };
   }, [file]);
@@ -114,41 +187,31 @@ const CompressTool: React.FC = () => {
       
       const generateCompressedThumb = async () => {
         if (!window.pdfjsLib) return;
-
         try {
             const pdfjs = window.pdfjsLib;
             loadingTask = pdfjs.getDocument(objectUrl);
             const pdf = await loadingTask.promise;
-            
             if (!active) return;
 
             const page = await pdf.getPage(1);
-            const viewport = page.getViewport({ scale: 0.5 });
-            
+            const viewport = page.getViewport({ scale: 1.0 });
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-            
             if (ctx) {
                 canvas.width = viewport.width;
                 canvas.height = viewport.height;
                 await page.render({ canvasContext: ctx, viewport }).promise;
-                
-                if (active) {
-                    setCompressedThumbnailUrl(canvas.toDataURL());
-                }
+                if (active) setCompressedThumbnailUrl(canvas.toDataURL());
             }
         } catch (e) {
-            if (active) console.warn("Result thumbnail generation failed", e);
+            console.warn("Result thumb failed", e);
         }
       };
-
       generateCompressedThumb();
 
       return () => {
           active = false;
-          if (loadingTask && loadingTask.destroy) {
-              loadingTask.destroy().catch(() => {});
-          }
+          if (loadingTask && loadingTask.destroy) loadingTask.destroy().catch(() => {});
           URL.revokeObjectURL(objectUrl);
       };
   }, [status.resultBlob]);
@@ -177,7 +240,6 @@ const CompressTool: React.FC = () => {
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0]);
       setStatus({ isProcessing: false, currentStep: '', progress: 0 }); 
-      // Reset to default settings
       setActivePreset('recommended');
       applyPreset('recommended');
     }
@@ -206,7 +268,6 @@ const CompressTool: React.FC = () => {
     } else if (type === 'lossless') {
         setSettings(s => ({ ...s, mode: CompressionMode.STRUCTURE, quality: 1.0, maxResolution: 5000, grayscale: false }));
     }
-    // Custom leaves settings alone
   };
 
   const handleStart = async () => {
@@ -237,7 +298,7 @@ const CompressTool: React.FC = () => {
       setStatus(prev => ({ 
         ...prev, 
         isProcessing: false, 
-        error: error.message || 'Compression failed. The file might be corrupted or too large.' 
+        error: error.message || 'Compression failed.' 
       }));
     }
   };
@@ -287,9 +348,9 @@ const CompressTool: React.FC = () => {
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
               className={`
-                border-4 border-dashed rounded-3xl p-12 sm:p-16 text-center cursor-pointer transition-all duration-200 group
+                border-4 border-dashed rounded-3xl p-12 sm:p-20 text-center cursor-pointer transition-all duration-200 group
                 ${isDragging 
-                  ? 'border-indigo-500 bg-indigo-50 dark:bg-slate-700 scale-[1.02]' 
+                  ? 'border-indigo-500 bg-indigo-50 dark:bg-slate-700 scale-[1.01]' 
                   : 'border-slate-200 dark:border-slate-600 hover:border-indigo-400 dark:hover:border-indigo-500 hover:bg-slate-50 dark:hover:bg-slate-700/50'}
               `}
             >
@@ -299,7 +360,7 @@ const CompressTool: React.FC = () => {
               <h3 className="text-2xl font-bold text-slate-700 dark:text-slate-200 mb-2">
                 {isDragging ? 'Drop file now' : 'Select PDF File'}
               </h3>
-              <p className="text-slate-500 dark:text-slate-400">or drag and drop here</p>
+              <p className="text-slate-500 dark:text-slate-400">Drag and drop or click to upload</p>
             </div>
           )}
 
@@ -307,131 +368,81 @@ const CompressTool: React.FC = () => {
           {file && !status.resultBlob && (
             <div className={`space-y-8 animate-fade-in ${status.isProcessing ? 'pointer-events-none opacity-60' : ''}`}>
               
-              {/* File Info Bar with Thumbnail */}
-              <div className="flex flex-col sm:flex-row items-center gap-4 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
-                <div className="w-16 h-20 bg-slate-200 dark:bg-slate-800 rounded-lg shadow-sm shrink-0 overflow-hidden flex items-center justify-center">
-                    {thumbnailUrl ? (
-                        <img src={thumbnailUrl} alt="Preview" className="w-full h-full object-cover opacity-80" />
-                    ) : (
-                        <span className="text-2xl">📄</span>
-                    )}
+              {/* File Info Bar */}
+              <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
+                <div className="w-12 h-16 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-600 flex items-center justify-center shrink-0">
+                    <span className="text-2xl">📄</span>
                 </div>
-                
-                <div className="flex-1 text-center sm:text-left min-w-0">
+                <div className="flex-1 min-w-0">
                     <h3 className="font-bold text-slate-800 dark:text-slate-200 truncate">{file.name}</h3>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 font-mono">{formatBytes(file.size)}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">{formatBytes(file.size)}</p>
                 </div>
-
-                <div className="flex gap-2 w-full sm:w-auto">
-                   <button 
-                    onClick={handleFileChangeClick}
-                    className="flex-1 sm:flex-none px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 font-bold text-xs rounded-xl transition-colors"
-                  >
-                    Change
-                  </button>
-                  <button 
+                <button 
                     onClick={resetState}
-                    className="flex-1 sm:flex-none p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors border border-transparent"
+                    className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"
                     title="Remove file"
-                  >
-                    <svg className="w-5 h-5 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                  </button>
-                </div>
+                >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
               </div>
 
-              {/* Compression Levels - New Grid Layout */}
+              {/* Presets Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                 
-                 {/* Extreme */}
-                 <button 
-                    onClick={() => applyPreset('extreme')}
-                    className={`relative p-5 rounded-2xl border-2 text-left transition-all hover:scale-[1.02] active:scale-[0.98]
-                        ${activePreset === 'extreme' 
-                          ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20 ring-1 ring-orange-500' 
-                          : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-orange-300'}`}
-                 >
-                     <div className="mb-3">
-                         <span className={`text-xs font-black uppercase tracking-wider px-2 py-1 rounded-md ${activePreset === 'extreme' ? 'bg-orange-200 text-orange-800 dark:bg-orange-800 dark:text-orange-100' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'}`}>
-                             Smallest Size
-                         </span>
-                     </div>
-                     <div className="text-3xl mb-1">📉</div>
-                     <h4 className="font-bold text-slate-800 dark:text-white">Extreme</h4>
-                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-snug">
-                        Low quality, maximum reduction. Best for drafts.
-                     </p>
-                 </button>
-
-                 {/* Recommended */}
-                 <button 
-                    onClick={() => applyPreset('recommended')}
-                    className={`relative p-5 rounded-2xl border-2 text-left transition-all hover:scale-[1.02] active:scale-[0.98]
-                        ${activePreset === 'recommended' 
-                          ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 ring-1 ring-indigo-500 shadow-md' 
-                          : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-indigo-300'}`}
-                 >
-                     <div className="mb-3">
-                         <span className={`text-xs font-black uppercase tracking-wider px-2 py-1 rounded-md ${activePreset === 'recommended' ? 'bg-indigo-200 text-indigo-800 dark:bg-indigo-800 dark:text-indigo-100' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'}`}>
-                             Best Choice
-                         </span>
-                     </div>
-                     <div className="text-3xl mb-1">✨</div>
-                     <h4 className="font-bold text-slate-800 dark:text-white">Recommended</h4>
-                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-snug">
-                        Good quality, good compression. Best for sharing.
-                     </p>
-                 </button>
-
-                 {/* Lossless */}
-                 <button 
-                    onClick={() => applyPreset('lossless')}
-                    className={`relative p-5 rounded-2xl border-2 text-left transition-all hover:scale-[1.02] active:scale-[0.98]
-                        ${activePreset === 'lossless' 
-                          ? 'border-green-500 bg-green-50 dark:bg-green-900/20 ring-1 ring-green-500' 
-                          : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-green-300'}`}
-                 >
-                     <div className="mb-3">
-                         <span className={`text-xs font-black uppercase tracking-wider px-2 py-1 rounded-md ${activePreset === 'lossless' ? 'bg-green-200 text-green-800 dark:bg-green-800 dark:text-green-100' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'}`}>
-                             Top Quality
-                         </span>
-                     </div>
-                     <div className="text-3xl mb-1">💎</div>
-                     <h4 className="font-bold text-slate-800 dark:text-white">Lossless</h4>
-                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-snug">
-                        Optimizes structure only. No visual quality loss.
-                     </p>
-                 </button>
+                 {[
+                    { id: 'extreme', icon: '📉', label: 'Extreme', desc: 'Max reduction, low quality', color: 'orange' },
+                    { id: 'recommended', icon: '✨', label: 'Recommended', desc: 'Balanced size & quality', color: 'indigo' },
+                    { id: 'lossless', icon: '💎', label: 'Lossless', desc: 'Original quality, less savings', color: 'green' }
+                 ].map((preset) => (
+                     <button 
+                        key={preset.id}
+                        onClick={() => applyPreset(preset.id as PresetType)}
+                        className={`relative p-5 rounded-2xl border-2 text-left transition-all hover:scale-[1.02] active:scale-[0.98] flex flex-col h-full
+                            ${activePreset === preset.id 
+                              ? `border-${preset.color}-500 bg-${preset.color}-50 dark:bg-${preset.color}-900/20 ring-1 ring-${preset.color}-500 shadow-md` 
+                              : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-600'}`}
+                     >
+                         <div className="text-3xl mb-3">{preset.icon}</div>
+                         <h4 className={`font-bold ${activePreset === preset.id ? `text-${preset.color}-700 dark:text-${preset.color}-300` : 'text-slate-800 dark:text-white'}`}>
+                             {preset.label}
+                         </h4>
+                         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-snug">
+                            {preset.desc}
+                         </p>
+                         {activePreset === preset.id && (
+                             <div className={`absolute top-4 right-4 w-3 h-3 rounded-full bg-${preset.color}-500 shadow-sm`} />
+                         )}
+                     </button>
+                 ))}
               </div>
 
-               {/* Advanced Settings Toggle */}
-               <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
+               {/* Advanced Settings */}
+               <div className="border-t border-slate-200 dark:border-slate-700 pt-6">
                    <button 
                      onClick={() => setShowAdvanced(!showAdvanced)}
                      className="flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-indigo-500 transition-colors mx-auto"
                    >
-                       {showAdvanced ? 'Hide Advanced Options' : 'Show Advanced Options (Custom)'}
+                       {showAdvanced ? 'Hide Custom Options' : 'Show Custom Options'}
                        <svg className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
                    </button>
 
-                   {/* Advanced Panel */}
-                   <div className={`overflow-hidden transition-all duration-300 ease-in-out ${showAdvanced ? 'max-h-96 opacity-100 mt-4' : 'max-h-0 opacity-0'}`}>
+                   <div className={`overflow-hidden transition-all duration-300 ease-in-out ${showAdvanced ? 'max-h-96 opacity-100 mt-6' : 'max-h-0 opacity-0'}`}>
                         <div className="bg-slate-50 dark:bg-slate-900/50 p-6 rounded-2xl space-y-6 border border-slate-200 dark:border-slate-700">
                             
-                            <div className="flex gap-4 mb-4">
-                                <label className="flex items-center gap-2 cursor-pointer">
+                            <div className="flex gap-4">
+                                <label className="flex items-center gap-2 cursor-pointer p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 flex-1">
                                     <input type="radio" checked={settings.mode === CompressionMode.STRUCTURE} onChange={() => { setSettings(s => ({...s, mode: CompressionMode.STRUCTURE})); setActivePreset('custom'); }} className="text-indigo-600 focus:ring-indigo-500" />
-                                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200">Structure Mode</span>
+                                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200">Structure Only</span>
                                 </label>
-                                <label className="flex items-center gap-2 cursor-pointer">
+                                <label className="flex items-center gap-2 cursor-pointer p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 flex-1">
                                     <input type="radio" checked={settings.mode === CompressionMode.IMAGE} onChange={() => { setSettings(s => ({...s, mode: CompressionMode.IMAGE})); setActivePreset('custom'); }} className="text-indigo-600 focus:ring-indigo-500" />
-                                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200">Image Mode</span>
+                                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200">Image Compress</span>
                                 </label>
                             </div>
 
                             {settings.mode === CompressionMode.IMAGE && (
-                                <div className="space-y-4">
+                                <div className="space-y-6">
                                     <div>
-                                        <div className="flex justify-between text-xs font-bold uppercase text-slate-500 mb-1">
+                                        <div className="flex justify-between text-xs font-bold uppercase text-slate-500 mb-2">
                                             <span>Image Quality</span>
                                             <span>{Math.round(settings.quality * 100)}%</span>
                                         </div>
@@ -443,7 +454,7 @@ const CompressTool: React.FC = () => {
                                         />
                                     </div>
                                     <div>
-                                        <div className="flex justify-between text-xs font-bold uppercase text-slate-500 mb-1">
+                                        <div className="flex justify-between text-xs font-bold uppercase text-slate-500 mb-2">
                                             <span>Max Resolution</span>
                                             <span>{settings.maxResolution}px</span>
                                         </div>
@@ -454,39 +465,31 @@ const CompressTool: React.FC = () => {
                                             className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-600"
                                         />
                                     </div>
-                                    <label className="flex items-center gap-3 mt-2">
-                                        <input type="checkbox" checked={settings.grayscale} onChange={(e) => { setSettings(s => ({...s, grayscale: e.target.checked})); setActivePreset('custom'); }} className="rounded text-indigo-600 focus:ring-indigo-500" />
-                                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Convert to Grayscale</span>
-                                    </label>
+                                    <div className="flex flex-col sm:flex-row gap-4">
+                                        <label className="flex items-center gap-3 cursor-pointer">
+                                            <input type="checkbox" checked={settings.grayscale} onChange={(e) => { setSettings(s => ({...s, grayscale: e.target.checked})); setActivePreset('custom'); }} className="rounded text-indigo-600 focus:ring-indigo-500 w-5 h-5" />
+                                            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Convert to Grayscale</span>
+                                        </label>
+                                        <label className="flex items-center gap-3 cursor-pointer">
+                                            <input type="checkbox" checked={settings.preserveMetadata} onChange={(e) => { setSettings(s => ({...s, preserveMetadata: e.target.checked})); setActivePreset('custom'); }} className="rounded text-indigo-600 focus:ring-indigo-500 w-5 h-5" />
+                                            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Preserve Metadata</span>
+                                        </label>
+                                    </div>
                                 </div>
                             )}
-                            
-                            <label className="flex items-center gap-3">
-                                <input type="checkbox" checked={settings.preserveMetadata} onChange={(e) => { setSettings(s => ({...s, preserveMetadata: e.target.checked})); setActivePreset('custom'); }} className="rounded text-indigo-600 focus:ring-indigo-500" />
-                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Preserve Metadata (Author, Title)</span>
-                            </label>
                         </div>
                    </div>
                </div>
 
-              {/* Progress Bar with Spinner */}
+              {/* Progress Indicator (Centered & Large) */}
               {status.isProcessing && (
-                <div className="space-y-2">
-                  <div className="flex justify-between text-xs font-bold uppercase text-slate-500 dark:text-slate-400 tracking-wider">
-                    <span className="flex items-center gap-2">
-                        <div className="w-2 h-2 bg-indigo-500 rounded-full animate-ping"></div>
-                        {status.currentStep}
-                    </span>
-                    <span>{status.progress}%</span>
-                  </div>
-                  <div className="h-4 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden shadow-inner">
-                    <div 
-                      className="h-full bg-indigo-500 transition-all duration-300 ease-out relative" 
-                      style={{ width: `${status.progress}%` }}
-                    >
-                       <div className="absolute inset-0 bg-white/20 animate-[spin-slow_2s_linear_infinite]" style={{backgroundImage: 'linear-gradient(45deg,rgba(255,255,255,.15) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.15) 50%,rgba(255,255,255,.15) 75%,transparent 75%,transparent)', backgroundSize: '1rem 1rem'}}></div>
+                <div className="flex flex-col items-center justify-center py-8">
+                    <div className="relative w-20 h-20 mb-4">
+                        <div className="absolute inset-0 border-4 border-indigo-100 dark:border-slate-700 rounded-full"></div>
+                        <div className="absolute inset-0 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
                     </div>
-                  </div>
+                    <h3 className="text-xl font-bold text-indigo-600 dark:text-indigo-400 animate-pulse">{status.progress}%</h3>
+                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-2">{status.currentStep}</p>
                 </div>
               )}
 
@@ -499,108 +502,77 @@ const CompressTool: React.FC = () => {
               )}
 
               {/* Main Action Button */}
-              <button
-                onClick={handleStart}
-                disabled={status.isProcessing}
-                className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-2xl font-bold text-lg shadow-lg shadow-indigo-200 dark:shadow-none transition-all active:scale-[0.98] flex items-center justify-center gap-3"
-              >
-                {status.isProcessing ? 'Compressing...' : 'Compress PDF'}
-                {!status.isProcessing && <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>}
-              </button>
+              {!status.isProcessing && (
+                  <button
+                    onClick={handleStart}
+                    className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white rounded-2xl font-bold text-lg shadow-lg shadow-indigo-200 dark:shadow-none transition-all active:scale-[0.98] flex items-center justify-center gap-3"
+                  >
+                    Compress PDF Now
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                  </button>
+              )}
             </div>
           )}
 
           {/* 3. Results */}
           {status.resultBlob && (
-             <div ref={resultsRef} className="text-center animate-fade-in-up">
+             <div ref={resultsRef} className="animate-fade-in-up">
                 
                 {/* Result Header */}
-                <div className="inline-block mb-8">
-                    <div className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 px-6 py-2 rounded-full border border-green-200 dark:border-green-800 flex items-center gap-2 shadow-sm">
-                        <span className="text-xl">🎉</span>
-                        <span className="font-bold">Ready to Download</span>
+                <div className="text-center mb-8">
+                    <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full mb-4">
+                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
                     </div>
+                    <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Compression Complete!</h2>
                 </div>
                 
-                {/* Stats Card - Redesigned */}
-                <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 md:p-8 border border-slate-100 dark:border-slate-700 max-w-lg mx-auto mb-8 shadow-sm">
-                    <div className="flex items-center justify-between gap-4 mb-2">
-                        <div className="text-left">
-                             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Before</p>
-                             <p className="text-lg font-bold text-slate-500 line-through decoration-red-400">{formatBytes(status.originalSize || 0)}</p>
-                        </div>
-                        <div className="text-slate-300 dark:text-slate-600">
-                            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
-                        </div>
-                        <div className="text-right">
-                             <p className="text-xs font-bold text-indigo-500 uppercase tracking-wider mb-1">After</p>
-                             <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400">{formatBytes(status.compressedSize || status.resultBlob.size)}</p>
-                        </div>
+                {/* Stats Bar */}
+                <div className="bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 sm:p-6 mb-8 flex flex-col sm:flex-row justify-between items-center gap-4 shadow-sm">
+                    <div className="text-center sm:text-left">
+                         <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Original Size</p>
+                         <p className="text-lg font-bold text-slate-500 line-through decoration-red-400">{formatBytes(status.originalSize || 0)}</p>
                     </div>
-                    
-                    <div className={`mt-4 p-3 rounded-xl flex justify-center items-center gap-2 ${isSavingsNegative ? 'bg-orange-50 text-orange-700' : 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'}`}>
-                        {isSavingsNegative ? (
-                            <>
-                                <span className="text-xl">⚠️</span>
-                                <span className="font-bold text-sm">File size increased. Try "Extreme" mode.</span>
-                            </>
-                        ) : (
-                            <>
-                                <span className="text-xl">🔥</span>
-                                <span className="font-bold text-lg">{savingsPercent}% Smaller</span>
-                            </>
-                        )}
+                    <div className="text-slate-300 dark:text-slate-600 rotate-90 sm:rotate-0">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
+                    </div>
+                    <div className="text-center sm:text-right">
+                         <p className="text-xs font-bold text-indigo-500 uppercase tracking-wider mb-1">New Size</p>
+                         <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400">{formatBytes(status.compressedSize || status.resultBlob.size)}</p>
+                    </div>
+                    <div className={`px-4 py-2 rounded-lg font-bold text-sm ${isSavingsNegative ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'}`}>
+                        {isSavingsNegative ? 'Larger (+)' : `-${savingsPercent}% Saved`}
                     </div>
                 </div>
 
-                {/* --- Comparison View Feature --- */}
+                {/* Comparison Slider */}
                 {compressedThumbnailUrl && thumbnailUrl && (
-                    <div className="mb-8 max-w-lg mx-auto">
-                        <h4 className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-3 tracking-wider">Quality Check</h4>
-                        <div className="bg-slate-100 dark:bg-slate-900/50 p-2 rounded-2xl border border-slate-200 dark:border-slate-700">
-                            <div className="relative aspect-[3/4] rounded-xl overflow-hidden bg-white">
-                                <img 
-                                    src={showOriginalInComparison ? thumbnailUrl : compressedThumbnailUrl} 
-                                    alt="Preview" 
-                                    className="w-full h-full object-contain" 
-                                />
-                                <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-lg">
-                                    {showOriginalInComparison ? 'ORIGINAL' : 'COMPRESSED'}
-                                </div>
-                            </div>
-                            
-                            <div className="flex gap-2 mt-2">
-                                <button 
-                                    onMouseEnter={() => setShowOriginalInComparison(true)}
-                                    onMouseLeave={() => setShowOriginalInComparison(false)}
-                                    onTouchStart={() => setShowOriginalInComparison(true)}
-                                    onTouchEnd={() => setShowOriginalInComparison(false)}
-                                    className="w-full py-2 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-600 hover:bg-slate-50 shadow-sm"
-                                >
-                                    Hold to See Original
-                                </button>
-                            </div>
+                    <div className="mb-8">
+                        <div className="flex justify-between items-end mb-3 px-1">
+                            <h4 className="text-sm font-bold uppercase text-slate-500 dark:text-slate-400 tracking-wider">Quality Check</h4>
+                            <span className="text-[10px] text-slate-400">Drag slider to compare</span>
                         </div>
+                        <ComparisonSlider original={thumbnailUrl} compressed={compressedThumbnailUrl} />
                     </div>
                 )}
 
+                {/* Actions */}
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
                   <button 
                     onClick={handleDownload}
-                    className="w-full sm:w-auto px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-indigo-200 dark:shadow-none transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2"
+                    className="flex-1 px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-indigo-200 dark:shadow-none transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                     Download PDF
                   </button>
                   <button 
                     onClick={handleBackToOptions}
-                    className="w-full sm:w-auto px-8 py-4 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 rounded-xl font-bold hover:bg-slate-50 dark:hover:bg-slate-600 transition-all"
+                    className="flex-1 px-8 py-4 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 rounded-xl font-bold hover:bg-slate-50 dark:hover:bg-slate-600 transition-all"
                   >
-                    Try Another Setting
+                    Adjust Settings
                   </button>
                   <button 
                     onClick={resetState}
-                    className="w-full sm:w-auto px-8 py-4 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+                    className="px-6 py-4 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 font-bold transition-colors"
                   >
                     Start Over
                   </button>
