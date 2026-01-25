@@ -7,13 +7,12 @@
     <meta name="description" content="Offline PDF Compression Tool. Installable on Mobile and Desktop." />
     <title>PDF Toolkit Pro</title>
     
-    <!-- PWA Manifest -->
-    <link rel="manifest" href="/pdf-toolkit-app/public/manifest.json" />
-
+    <!-- PWA Manifest (Must be ./manifest.json for Vite build) -->
+    <link rel="manifest" href="./manifest.json" />
     
     <!-- Icons -->
-    <link rel="icon" type="image/svg+xml" href="/pdf-toolkit-app/icon.svg" />
-    <link rel="apple-touch-icon" href="/pdf-toolkit-app/icon.svg" />
+    <link rel="icon" type="image/png" href="./icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="./icons/icon-192.png" />
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -69,15 +68,11 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
-    <!-- EMERGENCY SW CLEANUP: This handles the v1.17.0 -> v2.0.x migration issue -->
+    <!-- EMERGENCY SW CLEANUP -->
     <script>
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistrations().then(function(registrations) {
-          for(let registration of registrations) {
-            // We forcefully unregister to ensure the new file is fetched from the server
-            // The App.tsx will re-register the correct one immediately after
-           // registration.unregister(); // commented out to let APP.tsx handle updates gracefully now
-          }
+          // Optional: clear registrations if needed
         });
       }
     </script>

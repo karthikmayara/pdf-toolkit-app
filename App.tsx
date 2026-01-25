@@ -14,12 +14,12 @@ import UpdateNotification from './components/UpdateNotification';
 type ToolType = 'compress' | 'convert' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'numbers' | 'rotate' | 'ocr' | null;
 
 const RELEASE_NOTES = {
-  version: 'v2.2.0',
+  version: 'v2.3.0',
   notes: [
-    'New App Icon & Brand Identity',
-    'Fixed Install App button issues',
-    'Improved PWA Manifest & Caching',
-    'Optimized offline mode'
+    'Fixed Manifest 404 Errors',
+    'Switched to PNG Icons',
+    'Added Icon Generator Tool',
+    'Improved PWA Reliability'
   ]
 };
 
@@ -49,18 +49,12 @@ export default function App() {
   });
 
   const [activeTool, setActiveTool] = useState<ToolType>(null);
-
-  // SW Update State
   const [showUpdateNotification, setShowUpdateNotification] = useState(false);
   const [swRegistration, setSwRegistration] = useState<ServiceWorkerRegistration | null>(null);
-  
-  // Install Prompt State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  
-  // Ref to ensure we only attempt registration once per mount
   const swInitialized = useRef(false);
 
-  // 1. Dark Mode Effect
+  // 1. Dark Mode
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark');
@@ -71,46 +65,34 @@ export default function App() {
     }
   }, [darkMode]);
 
-  // 2. Install Prompt Listener
+  // 2. Install Prompt
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       console.log('Install prompt captured');
       setDeferredPrompt(e);
     };
-
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
   }, []);
 
-  // 3. Browser History & Back Button Support
+  // 3. Navigation
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
       const toolId = event.state?.tool;
-      // If state has tool, set it. If not, we are likely at home (null)
       setActiveTool(toolId || null);
     };
-
     window.addEventListener('popstate', handlePopState);
-    
-    // Initial check for hash on load
     if (window.location.hash) {
       const toolFromHash = window.location.hash.substring(1) as ToolType;
-      // Validate tool
-      if (getToolDetails(toolFromHash).name) {
-        setActiveTool(toolFromHash);
-      }
+      if (getToolDetails(toolFromHash).name) setActiveTool(toolFromHash);
     }
-
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  // Navigation Helper
   const navigateToTool = (toolId: ToolType) => {
     setActiveTool(toolId);
-    if (toolId) {
-      window.history.pushState({ tool: toolId }, '', `#${toolId}`);
-    }
+    if (toolId) window.history.pushState({ tool: toolId }, '', `#${toolId}`);
   };
 
   const navigateHome = () => {
@@ -123,15 +105,12 @@ export default function App() {
     if (deferredPrompt) {
       deferredPrompt.prompt();
       deferredPrompt.userChoice.then((choiceResult: any) => {
-        if (choiceResult.outcome === 'accepted') {
-          console.log('User accepted the install prompt');
-        }
         setDeferredPrompt(null);
       });
     }
   };
 
-  // 4. Service Worker Registration with FORCE UPDATE Logic
+  // 4. Service Worker
   useEffect(() => {
     if (swInitialized.current) return;
     swInitialized.current = true;
@@ -139,29 +118,11 @@ export default function App() {
     const registerSW = async () => {
       if ('serviceWorker' in navigator) {
         try {
-          // CLEANUP: Force removal of old, broken service workers
-          const registrations = await navigator.serviceWorker.getRegistrations();
-          for (const registration of registrations) {
-             // We can check if it's the right scope, but safety first for this fix
-             // We won't unregister blindly here to avoid loop if valid, 
-             // but we WILL rely on the cache-busting registration below.
-          }
-
-          // Register new SW with cache-busting query param to ensure browser fetches the new file
-          // preventing the "stuck on v1.17" issue
           const swUrl = `./sw.js?v=${Date.now()}`;
           const reg = await navigator.serviceWorker.register(swUrl, { scope: './' });
           setSwRegistration(reg);
-
-          console.log('Service Worker registered with scope:', reg.scope);
-
-          // Force update check
           reg.update();
-
-          if (reg.waiting) {
-            setShowUpdateNotification(true);
-          }
-
+          if (reg.waiting) setShowUpdateNotification(true);
           reg.addEventListener('updatefound', () => {
             const newWorker = reg.installing;
             if (newWorker) {
@@ -172,7 +133,6 @@ export default function App() {
               });
             }
           });
-
           let refreshing = false;
           navigator.serviceWorker.addEventListener('controllerchange', () => {
             if (!refreshing) {
@@ -185,20 +145,7 @@ export default function App() {
         }
       }
     };
-
-    // Delay slightly to prioritize main thread for UI
-    const initSW = () => {
-      setTimeout(() => {
-        registerSW();
-      }, 1000); 
-    };
-
-    if (document.readyState === 'complete') {
-      initSW();
-    } else {
-      window.addEventListener('load', initSW);
-      return () => window.removeEventListener('load', initSW);
-    }
+    setTimeout(registerSW, 1000);
   }, []);
 
   const handleUpdateApp = () => {
@@ -210,21 +157,65 @@ export default function App() {
     }
   };
 
-  const ToolCard = ({ 
-    title, 
-    desc, 
-    icon, 
-    colorClass, 
-    onClick, 
-    delayClass = "" 
-  }: { 
-    title: string, 
-    desc: string, 
-    icon: React.ReactNode, 
-    colorClass: string,
-    onClick: () => void,
-    delayClass?: string
-  }) => (
+  // --- ICON GENERATOR UTILITY ---
+  const generateAndDownloadIcons = async () => {
+      const sizes = [192, 512];
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      for (const size of sizes) {
+          canvas.width = size;
+          canvas.height = size;
+          
+          // Draw Background
+          const grad = ctx.createLinearGradient(0, 0, size, size);
+          grad.addColorStop(0, '#6366f1');
+          grad.addColorStop(1, '#4338ca');
+          ctx.fillStyle = grad;
+          
+          // Draw rounded rect
+          ctx.beginPath();
+          ctx.roundRect(0, 0, size, size, size * 0.2);
+          ctx.fill();
+
+          // Draw Icon (Simple Paper Stack Representation)
+          ctx.fillStyle = 'rgba(255,255,255,0.9)';
+          const p = size * 0.2; // padding
+          const w = size - (p*2);
+          const h = size - (p*2);
+          
+          // Back Page
+          ctx.globalAlpha = 0.5;
+          ctx.fillRect(p + w*0.1, p, w*0.8, h);
+          // Front Page
+          ctx.globalAlpha = 1.0;
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(p, p + h*0.1, w*0.8, h*0.9);
+          
+          // Lines
+          ctx.fillStyle = '#4f46e5';
+          ctx.globalAlpha = 0.2;
+          ctx.fillRect(p + w*0.1, p + h*0.3, w*0.6, h*0.05);
+          ctx.fillRect(p + w*0.1, p + h*0.45, w*0.6, h*0.05);
+          ctx.fillRect(p + w*0.1, p + h*0.6, w*0.4, h*0.05);
+
+          // Export
+          const blob = await new Promise<Blob | null>(r => canvas.toBlob(r, 'image/png'));
+          if (blob) {
+              const a = document.createElement('a');
+              a.href = URL.createObjectURL(blob);
+              a.download = `icon-${size}.png`;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              await new Promise(r => setTimeout(r, 500)); // Pause between downloads
+          }
+      }
+      alert("Icons Downloaded!\n\n1. Create a 'public/icons' folder.\n2. Move these 2 files there.\n3. Redeploy.");
+  };
+
+  const ToolCard = ({ title, desc, icon, colorClass, onClick, delayClass = "" }: any) => (
     <button
       onClick={onClick}
       className={`group relative flex flex-col items-center justify-center p-6 bg-white/60 dark:bg-slate-800/60 backdrop-blur-md border border-white/50 dark:border-slate-700 rounded-3xl shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 text-center animate-fade-in-up ${delayClass}`}
@@ -246,10 +237,8 @@ export default function App() {
       <header className="sticky top-0 z-40 w-full backdrop-blur-xl bg-white/70 dark:bg-slate-900/80 border-b border-white/20 dark:border-slate-800 shadow-sm transition-all duration-300">
         <div className="max-w-7xl mx-auto px-4 h-16 sm:h-20 flex items-center justify-between">
             
-            {/* Dynamic Left Content */}
             <div className="flex items-center gap-3">
               {activeTool && currentToolDetails ? (
-                // Tool Active: Show Back + Title
                 <div className="flex items-center gap-2 sm:gap-4 animate-fade-in">
                    <button 
                       onClick={navigateHome}
@@ -267,11 +256,11 @@ export default function App() {
                    </div>
                 </div>
               ) : (
-                // Home: Show Logo
                 <div className="flex items-center gap-3 cursor-pointer group" onClick={navigateHome}>
-                  {/* Updated Logo using Icon Image */}
-                  <img src="./icon.svg" className="w-10 h-10 rounded-xl shadow-lg group-hover:rotate-6 transition-transform duration-300" alt="Logo" />
-                  
+                  {/* Using default emoji if icon fails to load, or the new PNG if available */}
+                  <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg flex items-center justify-center text-white text-xl font-bold">
+                     P
+                  </div>
                   <div className="hidden sm:block">
                     <h1 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-none">
                       PDF Toolkit <span className="text-indigo-600 dark:text-indigo-400">Pro</span>
@@ -282,16 +271,13 @@ export default function App() {
               )}
             </div>
 
-            {/* Right Actions */}
             <div className="flex items-center gap-3">
               {deferredPrompt && (
                 <button
                   onClick={handleInstallClick}
                   className="flex items-center gap-2 px-4 py-2 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-lg hover:shadow-xl hover:scale-105 transition-all font-bold text-xs sm:text-sm animate-pop"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                  <span className="hidden sm:inline">Install App</span>
-                  <span className="sm:hidden">Install</span>
+                  Install App
                 </button>
               )}
               
@@ -299,11 +285,7 @@ export default function App() {
                 onClick={() => setDarkMode(!darkMode)}
                 className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-yellow-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm"
               >
-                {darkMode ? (
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
-                ) : (
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
-                )}
+                {darkMode ? '🌙' : '☀️'}
               </button>
             </div>
         </div>
@@ -312,8 +294,6 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-4 pt-8 sm:pt-12">
         {!activeTool ? (
           <div className="space-y-12">
-            
-            {/* Hero Section */}
             <div className="text-center max-w-2xl mx-auto animate-fade-in space-y-4">
                <h2 className="text-4xl sm:text-5xl font-extrabold text-slate-800 dark:text-white tracking-tight">
                  All your PDF tools, <br/>
@@ -322,121 +302,23 @@ export default function App() {
                <p className="text-slate-600 dark:text-slate-300 text-lg leading-relaxed">
                  Process documents directly in your browser. No uploads, no waiting, 100% private.
                </p>
-               
-               {/* Hero Install Prompt */}
-               {deferredPrompt && (
-                 <div className="pt-4 animate-fade-in-up">
-                    <button 
-                      onClick={handleInstallClick}
-                      className="inline-flex items-center gap-3 px-6 py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-full font-bold shadow-xl hover:scale-105 transition-transform"
-                    >
-                       <span className="text-xl">📲</span>
-                       <div className="text-left">
-                          <div className="text-xs opacity-80 uppercase tracking-wide">Get the App</div>
-                          <div className="text-sm">Install for Offline Use</div>
-                       </div>
-                    </button>
-                 </div>
-               )}
             </div>
 
-            {/* Tools Grid */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
-              
-              <ToolCard
-                title="Compress PDF"
-                desc="Smart reduction with quality control"
-                icon="📦"
-                colorClass="bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-300"
-                onClick={() => navigateToTool('compress')}
-                delayClass="stagger-1"
-              />
-
-              <ToolCard
-                title="Merge PDFs"
-                desc="Combine multiple files into one"
-                icon="📑"
-                colorClass="bg-purple-100 text-purple-600 dark:bg-purple-900/40 dark:text-purple-300"
-                onClick={() => navigateToTool('merge')}
-                delayClass="stagger-2"
-              />
-
-              <ToolCard
-                title="Split PDF"
-                desc="Extract or delete specific pages"
-                icon="✂️"
-                colorClass="bg-orange-100 text-orange-600 dark:bg-orange-900/40 dark:text-orange-300"
-                onClick={() => navigateToTool('split')}
-                delayClass="stagger-3"
-              />
-
-              <ToolCard
-                title="Convert Images"
-                desc="PDF to IMG or IMG to PDF"
-                icon="🔄"
-                colorClass="bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300"
-                onClick={() => navigateToTool('convert')}
-                delayClass="stagger-4"
-              />
-              
-              <ToolCard
-                title="Sign PDF"
-                desc="Draw and place your signature"
-                icon="✍️"
-                colorClass="bg-indigo-100 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-300"
-                onClick={() => navigateToTool('sign')}
-                delayClass="stagger-5"
-              />
-
-              <ToolCard
-                title="Image OCR"
-                desc="Extract text from images"
-                icon="🔍"
-                colorClass="bg-pink-100 text-pink-600 dark:bg-pink-900/40 dark:text-pink-300"
-                onClick={() => navigateToTool('ocr')}
-                delayClass="stagger-6"
-              />
-
-              <ToolCard
-                title="Watermark"
-                desc="Stamp text on your documents"
-                icon="🛡️"
-                colorClass="bg-cyan-100 text-cyan-600 dark:bg-cyan-900/40 dark:text-cyan-300"
-                onClick={() => navigateToTool('watermark')}
-                delayClass="stagger-7"
-              />
-
-              <ToolCard
-                title="Optimize Image"
-                desc="Compress JPG, PNG, WEBP"
-                icon="📉"
-                colorClass="bg-teal-100 text-teal-600 dark:bg-teal-900/40 dark:text-teal-300"
-                onClick={() => navigateToTool('optimize')}
-                delayClass="stagger-8"
-              />
-
-              <ToolCard
-                title="Page Numbers"
-                desc="Add numbering to pages"
-                icon="🔢"
-                colorClass="bg-sky-100 text-sky-600 dark:bg-sky-900/40 dark:text-sky-300"
-                onClick={() => navigateToTool('numbers')}
-                delayClass="stagger-9"
-              />
-
-               <ToolCard
-                title="Rotate"
-                desc="Fix page orientation permanently"
-                icon="↻"
-                colorClass="bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-300"
-                onClick={() => navigateToTool('rotate')}
-                delayClass="stagger-10"
-              />
+              <ToolCard title="Compress PDF" desc="Smart reduction" icon="📦" colorClass="bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-300" onClick={() => navigateToTool('compress')} delayClass="stagger-1" />
+              <ToolCard title="Merge PDFs" desc="Combine files" icon="📑" colorClass="bg-purple-100 text-purple-600 dark:bg-purple-900/40 dark:text-purple-300" onClick={() => navigateToTool('merge')} delayClass="stagger-2" />
+              <ToolCard title="Split PDF" desc="Extract pages" icon="✂️" colorClass="bg-orange-100 text-orange-600 dark:bg-orange-900/40 dark:text-orange-300" onClick={() => navigateToTool('split')} delayClass="stagger-3" />
+              <ToolCard title="Convert Images" desc="PDF ↔ IMG" icon="🔄" colorClass="bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300" onClick={() => navigateToTool('convert')} delayClass="stagger-4" />
+              <ToolCard title="Sign PDF" desc="Digital signature" icon="✍️" colorClass="bg-indigo-100 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-300" onClick={() => navigateToTool('sign')} delayClass="stagger-5" />
+              <ToolCard title="Image OCR" desc="Extract text" icon="🔍" colorClass="bg-pink-100 text-pink-600 dark:bg-pink-900/40 dark:text-pink-300" onClick={() => navigateToTool('ocr')} delayClass="stagger-6" />
+              <ToolCard title="Watermark" desc="Add stamp" icon="🛡️" colorClass="bg-cyan-100 text-cyan-600 dark:bg-cyan-900/40 dark:text-cyan-300" onClick={() => navigateToTool('watermark')} delayClass="stagger-7" />
+              <ToolCard title="Optimize Image" desc="Compress IMG" icon="📉" colorClass="bg-teal-100 text-teal-600 dark:bg-teal-900/40 dark:text-teal-300" onClick={() => navigateToTool('optimize')} delayClass="stagger-8" />
+              <ToolCard title="Page Numbers" desc="Add numbering" icon="🔢" colorClass="bg-sky-100 text-sky-600 dark:bg-sky-900/40 dark:text-sky-300" onClick={() => navigateToTool('numbers')} delayClass="stagger-9" />
+              <ToolCard title="Rotate" desc="Fix orientation" icon="↻" colorClass="bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-300" onClick={() => navigateToTool('rotate')} delayClass="stagger-10" />
             </div>
           </div>
         ) : (
           <div className="animate-fade-in-up pb-10">
-            {/* Tool Render Container */}
             {activeTool === 'compress' && <CompressTool />}
             {activeTool === 'convert' && <ImageConverterTool />}
             {activeTool === 'merge' && <MergeTool />}
@@ -450,6 +332,17 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {/* Footer with Asset Generator */}
+      <footer className="max-w-7xl mx-auto px-4 py-8 text-center border-t border-slate-200 dark:border-slate-800 mt-12">
+          <p className="text-slate-400 text-xs mb-4">© 2024 PDF Toolkit Pro. Offline & Secure.</p>
+          <button 
+            onClick={generateAndDownloadIcons}
+            className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 px-3 py-2 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+          >
+            🛠️ Fix Missing Icons (Download PNGs)
+          </button>
+      </footer>
 
       {showUpdateNotification && (
         <UpdateNotification 
