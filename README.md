@@ -21,24 +21,30 @@ We built this toolkit to solve three major problems with existing online PDF too
 
 ## ✨ Features
 
-*   **📦 Compress PDF:** Smart reduction of file size while maintaining readability.
+*   **📦 Compress PDF:** Smart reduction of file size with visual quality check.
 *   **📑 Merge PDFs:** Combine multiple documents into a single file with drag-and-drop reordering.
 *   **✂️ Split PDF:** Extract specific pages or remove unwanted ones.
 *   **🔄 Convert:** Turn PDFs into Images (JPG, PNG, WebP) or create PDFs from images.
-*   **✍️ Sign:** Draw, type, or upload signatures and place them securely on documents.
+*   **✍️ Sign PDF:** Professional signing desk with multi-signature support, date stamping, and ink simulation.
 *   **🔍 OCR (Image to Text):** Extract text from scanned images using AI (Tesseract.js).
-*   **🛡️ Watermark:** Add custom text stamps to protect your documents.
-*   **📉 Image Optimizer:** Compress images (JPG, PNG, AVIF) locally.
+*   **🛡️ Watermark:** Add custom text stamps/overlays to protect your documents.
+*   **📉 Image Optimizer:** Compress images (JPG, PNG, AVIF) locally with side-by-side comparison.
 *   **🔢 Page Numbers:** Add customizable pagination to existing PDFs.
 *   **↻ Rotate:** Fix orientation issues for specific pages or the entire document.
 
-## 🌐 Does it need Internet?
+## 🔒 Privacy Promise
 
-**No.** (Mostly)
+*   **Zero Knowledge:** We do not track what you upload. We do not see your files.
+*   **Local Processing:** All "uploads" are actually just loading the file into your browser's memory.
+*   **Offline First:** Once loaded, you can disconnect the internet and the app works perfectly.
 
-*   **First Run:** You need internet to load the application for the first time.
-*   **Subsequent Runs:** The app installs itself as a **Service Worker**. You can open it, use every tool, and save files completely offline, even in "Airplane Mode".
-*   *Note:* The OCR tool may need to download language data packs once upon first use.
+## 🌐 Browser Support
+
+| Browser | Status | Notes |
+| :--- | :--- | :--- |
+| **Chrome / Edge** | ✅ Excellent | Recommended for fastest performance (V8 engine). |
+| **Firefox** | ✅ Good | Works well. |
+| **Safari (macOS/iOS)** | ⚠️ Good | Large files (>50MB) may crash due to stricter memory limits on iOS. |
 
 ## 🚀 How to Use
 
@@ -47,30 +53,10 @@ We built this toolkit to solve three major problems with existing online PDF too
 2.  Click the **"Install App"** button in the header (or via the browser menu).
 3.  Launch it like a native app from your desktop or home screen.
 
-### For Developers (Running Locally)
-
-This project is built with **React**, **Vite**, and **TypeScript**.
-
-1.  **Clone the repository**
-    ```bash
-    git clone https://github.com/yourusername/pdf-toolkit-pro.git
-    cd pdf-toolkit-pro
-    ```
-
-2.  **Install Dependencies**
-    ```bash
-    npm install
-    ```
-
-3.  **Run Development Server**
-    ```bash
-    npm run dev
-    ```
-
-4.  **Build for Production**
-    ```bash
-    npm run build
-    ```
+### Troubleshooting
+*   **"PDF Library loading..." forever:** Refresh the page. This usually happens if the CDN connection was interrupted during initial load.
+*   **App Crash on Large File:** If compressing a 100MB+ file on a mobile device, the browser may run out of memory. Try splitting the PDF into smaller chunks first using the Split tool.
+*   **Update Notification stuck:** Hard refresh (Ctrl+F5 or Cmd+Shift+R) to clear the Service Worker cache.
 
 ## 🛠️ Tech Stack
 

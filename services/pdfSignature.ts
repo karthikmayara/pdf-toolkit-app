@@ -20,6 +20,11 @@ export interface SignaturePlacement {
   h: number; // Percentage 0-100
 }
 
+export interface AssetInsertion {
+    blob: Blob;
+    placements: SignaturePlacement[];
+}
+
 // 1. Render a specific page of a PDF to a High-Res Image for the UI
 export const renderPdfPage = async (file: File, pageIndex: number, password?: string): Promise<RenderedPage> => {
   if (!window.pdfjsLib) {
@@ -72,11 +77,10 @@ export const renderPdfPage = async (file: File, pageIndex: number, password?: st
   }
 };
 
-// 2. Embed the Signature Images into the PDF (Bulk Operation)
+// 2. Embed Multiple Signatures/Images into the PDF (Bulk Operation)
 export const embedSignatures = async (
   file: File,
-  signatureBlob: Blob,
-  placements: SignaturePlacement[],
+  insertions: AssetInsertion[],
   password?: string
 ): Promise<Blob> => {
   if (!window.PDFLib) {
@@ -96,35 +100,47 @@ export const embedSignatures = async (
       throw e;
   }
   
-  const signatureBuffer = await signatureBlob.arrayBuffer();
-  const signatureImage = await pdfDoc.embedPng(signatureBuffer); // We assume signature is always PNG (transparency)
-
   const pages = pdfDoc.getPages();
 
-  for (const p of placements) {
-     if (p.pageIndex >= pages.length) continue;
-     
-     const page = pages[p.pageIndex];
-     const { width: pageWidth, height: pageHeight } = page.getSize();
-     
-     // Convert percentages to PDF points
-     const x = (p.x / 100) * pageWidth;
-     const yTop = (p.y / 100) * pageHeight; // Distance from top
-     const w = (p.w / 100) * pageWidth;
-     
-     // Calculate Height based on aspect ratio of the placement box
-     const h = (p.h / 100) * pageHeight;
+  // Process each unique asset
+  for (const insertion of insertions) {
+      const signatureBuffer = await insertion.blob.arrayBuffer();
+      // Embed PNG (Assuming signatures are PNGs). If JPG, embedJpg. 
+      // Safest is to try embedPng, if fail try embedJpg? 
+      // For this app, we generate PNGs in the UI, so embedPng is safe.
+      let signatureImage;
+      try {
+        signatureImage = await pdfDoc.embedPng(signatureBuffer);
+      } catch (e) {
+        // Fallback for JPEG uploads
+        signatureImage = await pdfDoc.embedJpg(signatureBuffer);
+      }
 
-     // PDF Coordinate System: (0,0) is bottom-left.
-     // y = height - (yFromTop + heightOfImage)
-     const y = pageHeight - yTop - h;
+      for (const p of insertion.placements) {
+         if (p.pageIndex >= pages.length) continue;
+         
+         const page = pages[p.pageIndex];
+         const { width: pageWidth, height: pageHeight } = page.getSize();
+         
+         // Convert percentages to PDF points
+         const x = (p.x / 100) * pageWidth;
+         const yTop = (p.y / 100) * pageHeight; // Distance from top
+         const w = (p.w / 100) * pageWidth;
+         
+         // Calculate Height based on aspect ratio of the placement box
+         const h = (p.h / 100) * pageHeight;
 
-     page.drawImage(signatureImage, {
-       x: x,
-       y: y,
-       width: w,
-       height: h,
-     });
+         // PDF Coordinate System: (0,0) is bottom-left.
+         // y = height - (yFromTop + heightOfImage)
+         const y = pageHeight - yTop - h;
+
+         page.drawImage(signatureImage, {
+           x: x,
+           y: y,
+           width: w,
+           height: h,
+         });
+      }
   }
 
   const pdfBytes = await pdfDoc.save();
