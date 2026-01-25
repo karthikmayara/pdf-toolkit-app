@@ -15,7 +15,7 @@ import UpdateNotification from './components/UpdateNotification';
 type ToolType = 'compress' | 'convert' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'numbers' | 'rotate' | 'ocr' | null;
 
 const RELEASE_NOTES = {
-  version: 'v2.8.7',
+  version: 'v2.8.8',
   notes: [
     '🚀 Gold Master Release',
     'New "Supreme" Sign Tool with Asset Library',
@@ -218,9 +218,9 @@ export default function App() {
                 {/* Brand Text */}
                 <div className="hidden sm:block">
                   <h1 className="text-xl font-black text-slate-900 dark:text-white tracking-tighter leading-none">
-                    LUMINA <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-cyan-500">PDF</span>
+                    PDF <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-cyan-500">PRO TOOLKIT</span>
                   </h1>
-                  <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em]">Pro Toolkit</p>
+                  <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em]">Offline Suite</p>
                 </div>
               </div>
 
@@ -271,7 +271,7 @@ export default function App() {
                 <div className="max-w-7xl mx-auto px-4 relative z-10 text-center space-y-6">
                     <div className="inline-block animate-fade-in-up">
                         <span className="px-3 py-1 rounded-full border border-indigo-500/30 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 text-[10px] font-bold uppercase tracking-[0.2em] backdrop-blur-sm">
-                            v2.8 Gold Master
+                            Developed by MAIK
                         </span>
                     </div>
                     
@@ -351,7 +351,7 @@ export default function App() {
                   <span className="font-bold text-slate-900 dark:text-white tracking-widest text-xs">PDF TOOLKIT PRO</span>
               </div>
               <p className="text-slate-400 text-xs font-medium">
-                  © 2025 Lumina Software. Offline & Secure.
+                  © 2026 MAIK. Offline & Secure.
               </p>
           </div>
       </footer>
