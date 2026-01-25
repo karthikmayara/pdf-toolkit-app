@@ -7,7 +7,7 @@
     <meta name="description" content="Offline PDF Compression Tool. Installable on Mobile and Desktop." />
     <title>PDF Toolkit Pro</title>
     
-    <!-- PWA Manifest (Must be ./manifest.json for Vite build) -->
+    <!-- PWA Manifest -->
     <link rel="manifest" href="./manifest.json" />
     
     <!-- Icons -->
@@ -68,14 +68,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
-    <!-- EMERGENCY SW CLEANUP -->
-    <script>
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(function(registrations) {
-          // Optional: clear registrations if needed
-        });
-      }
-    </script>
 <script type="importmap">
 {
   "imports": {

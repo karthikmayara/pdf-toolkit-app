@@ -14,12 +14,12 @@ import UpdateNotification from './components/UpdateNotification';
 type ToolType = 'compress' | 'convert' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'numbers' | 'rotate' | 'ocr' | null;
 
 const RELEASE_NOTES = {
-  version: 'v2.3.1',
+  version: 'v2.4.0',
   notes: [
-    'Fixed Manifest 404 Errors',
-    'Switched to PNG Icons',
-    'Added Icon Generator Tool',
-    'Improved PWA Reliability'
+    'Fixed Service Worker update loop',
+    'Resolved App Icon caching issues',
+    'Removed dev tools',
+    'Performance improvements'
   ]
 };
 
@@ -110,7 +110,7 @@ export default function App() {
     }
   };
 
-  // 4. Service Worker
+  // 4. Service Worker - FIXED REGISTRATION LOGIC
   useEffect(() => {
     if (swInitialized.current) return;
     swInitialized.current = true;
@@ -118,11 +118,21 @@ export default function App() {
     const registerSW = async () => {
       if ('serviceWorker' in navigator) {
         try {
-          const swUrl = `./sw.js?v=${Date.now()}`;
+          // Do NOT use a timestamp query param here. It creates a new SW every load.
+          // The browser automatically checks byte-for-byte changes in sw.js.
+          const swUrl = './sw.js';
+          
           const reg = await navigator.serviceWorker.register(swUrl, { scope: './' });
           setSwRegistration(reg);
+
+          // Check if an update is already waiting
+          if (reg.waiting) {
+            setShowUpdateNotification(true);
+          }
+
+          // Check for updates manually on load
           reg.update();
-          if (reg.waiting) setShowUpdateNotification(true);
+
           reg.addEventListener('updatefound', () => {
             const newWorker = reg.installing;
             if (newWorker) {
@@ -133,6 +143,8 @@ export default function App() {
               });
             }
           });
+
+          // Handle controller change (reload page when new SW takes over)
           let refreshing = false;
           navigator.serviceWorker.addEventListener('controllerchange', () => {
             if (!refreshing) {
@@ -145,7 +157,13 @@ export default function App() {
         }
       }
     };
-    setTimeout(registerSW, 1000);
+    
+    // Defer registration until after load to prioritize content
+    if (document.readyState === 'complete') {
+        registerSW();
+    } else {
+        window.addEventListener('load', registerSW);
+    }
   }, []);
 
   const handleUpdateApp = () => {
@@ -155,64 +173,6 @@ export default function App() {
     } else {
       window.location.reload();
     }
-  };
-
-  // --- ICON GENERATOR UTILITY ---
-  const generateAndDownloadIcons = async () => {
-      const sizes = [192, 512];
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      for (const size of sizes) {
-          canvas.width = size;
-          canvas.height = size;
-          
-          // Draw Background
-          const grad = ctx.createLinearGradient(0, 0, size, size);
-          grad.addColorStop(0, '#6366f1');
-          grad.addColorStop(1, '#4338ca');
-          ctx.fillStyle = grad;
-          
-          // Draw rounded rect
-          ctx.beginPath();
-          ctx.roundRect(0, 0, size, size, size * 0.2);
-          ctx.fill();
-
-          // Draw Icon (Simple Paper Stack Representation)
-          ctx.fillStyle = 'rgba(255,255,255,0.9)';
-          const p = size * 0.2; // padding
-          const w = size - (p*2);
-          const h = size - (p*2);
-          
-          // Back Page
-          ctx.globalAlpha = 0.5;
-          ctx.fillRect(p + w*0.1, p, w*0.8, h);
-          // Front Page
-          ctx.globalAlpha = 1.0;
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(p, p + h*0.1, w*0.8, h*0.9);
-          
-          // Lines
-          ctx.fillStyle = '#4f46e5';
-          ctx.globalAlpha = 0.2;
-          ctx.fillRect(p + w*0.1, p + h*0.3, w*0.6, h*0.05);
-          ctx.fillRect(p + w*0.1, p + h*0.45, w*0.6, h*0.05);
-          ctx.fillRect(p + w*0.1, p + h*0.6, w*0.4, h*0.05);
-
-          // Export
-          const blob = await new Promise<Blob | null>(r => canvas.toBlob(r, 'image/png'));
-          if (blob) {
-              const a = document.createElement('a');
-              a.href = URL.createObjectURL(blob);
-              a.download = `icon-${size}.png`;
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
-              await new Promise(r => setTimeout(r, 500)); // Pause between downloads
-          }
-      }
-      alert("Icons Downloaded!\n\n1. Create a 'public/icons' folder.\n2. Move these 2 files there.\n3. Redeploy.");
   };
 
   const ToolCard = ({ title, desc, icon, colorClass, onClick, delayClass = "" }: any) => (
@@ -257,8 +217,18 @@ export default function App() {
                 </div>
               ) : (
                 <div className="flex items-center gap-3 cursor-pointer group" onClick={navigateHome}>
-                  {/* Using default emoji if icon fails to load, or the new PNG if available */}
-                  <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg flex items-center justify-center text-white text-xl font-bold">
+                  {/* PWA Logo - Uses the cached icon if available */}
+                  <img 
+                    src="./icons/icon-192.png" 
+                    onError={(e) => {
+                        // Fallback to emoji if png is missing
+                        e.currentTarget.style.display = 'none';
+                        e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                    }}
+                    className="w-10 h-10 rounded-xl shadow-lg group-hover:rotate-6 transition-transform duration-300" 
+                    alt="Logo" 
+                  />
+                  <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg flex items-center justify-center text-white text-xl font-bold hidden">
                      P
                   </div>
                   <div className="hidden sm:block">
@@ -285,7 +255,11 @@ export default function App() {
                 onClick={() => setDarkMode(!darkMode)}
                 className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-yellow-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm"
               >
-                {darkMode ? '🌙' : '☀️'}
+                {darkMode ? 
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg> 
+                  : 
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                }
               </button>
             </div>
         </div>
@@ -333,15 +307,9 @@ export default function App() {
         )}
       </main>
 
-      {/* Footer with Asset Generator */}
+      {/* Footer */}
       <footer className="max-w-7xl mx-auto px-4 py-8 text-center border-t border-slate-200 dark:border-slate-800 mt-12">
-          <p className="text-slate-400 text-xs mb-4">© 2024 PDF Toolkit Pro. Offline & Secure.</p>
-          <button 
-            onClick={generateAndDownloadIcons}
-            className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 px-3 py-2 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-          >
-            🛠️ Fix Missing Icons (Download PNGs)
-          </button>
+          <p className="text-slate-400 text-xs">© 2024 PDF Toolkit Pro. Offline & Secure.</p>
       </footer>
 
       {showUpdateNotification && (
