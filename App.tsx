@@ -14,12 +14,12 @@ import UpdateNotification from './components/UpdateNotification';
 type ToolType = 'compress' | 'convert' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'numbers' | 'rotate' | 'ocr' | null;
 
 const RELEASE_NOTES = {
-  version: 'v2.4.0',
+  version: 'v2.5.0',
   notes: [
-    'Fixed Service Worker update loop',
-    'Resolved App Icon caching issues',
-    'Removed dev tools',
-    'Performance improvements'
+    'Fixed critical installation error',
+    'Resolved CORS issues with offline mode',
+    'Stabilized App Icon updates',
+    'Faster initial load'
   ]
 };
 

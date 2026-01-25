@@ -1,7 +1,9 @@
 // Increment this version string to force an update on user devices
-const APP_VERSION = 'v2.4.0';
+const APP_VERSION = 'v2.5.0';
 const CACHE_NAME = `pdf-toolkit-${APP_VERSION}`;
 
+// CRITICAL FIX: Only cache LOCAL files during install.
+// External files (CDNs) caused CORS errors which killed the SW installation.
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -14,8 +16,7 @@ self.addEventListener('install', (event) => {
   self.skipWaiting(); 
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      // We use map to handle individual file failures gracefully, 
-      // though for core assets like index.html we want it to succeed.
+      // We use map to handle individual file failures gracefully
       return Promise.all(
         ASSETS_TO_CACHE.map(url => {
           return cache.add(url).catch(err => {
@@ -35,12 +36,27 @@ self.addEventListener('fetch', (event) => {
   const isAsset = event.request.url.includes('icons/') || 
                   event.request.url.includes('manifest.json');
 
+  // Cache Strategy: Stale-While-Revalidate for CDNs and Assets
   if (isCdn || isAsset) {
     event.respondWith(
       caches.match(event.request).then((cachedResponse) => {
-        if (cachedResponse) return cachedResponse;
+        // Return cached response immediately if available
+        if (cachedResponse) {
+            // Update cache in background
+            fetch(event.request).then((response) => {
+                if (response && response.status === 200) {
+                    const responseToCache = response.clone();
+                    caches.open(CACHE_NAME).then((cache) => {
+                        cache.put(event.request, responseToCache);
+                    });
+                }
+            }).catch(() => {}); // Eat errors in background fetch
+            return cachedResponse;
+        }
         
+        // If not in cache, fetch it
         return fetch(event.request).then((response) => {
+          // Check if valid response. Note: Opaque responses (type 'opaque') are common for CDNs and ARE cacheable
           if (!response || (response.status !== 200 && response.type !== 'opaque')) {
             return response;
           }
@@ -49,13 +65,14 @@ self.addEventListener('fetch', (event) => {
             cache.put(event.request, responseToCache);
           });
           return response;
-        }).catch(() => {
-           // Return nothing or fallback if offline and not cached
+        }).catch((err) => {
+           console.warn('Fetch failed', err);
+           // If offline and not in cache, we can't do anything for CDNs
         });
       })
     );
   } else {
-    // Network first for main files to ensure updates, fallback to cache
+    // Network First for everything else (like index.html) to ensure updates
     event.respondWith(
       fetch(event.request)
         .then((response) => {
