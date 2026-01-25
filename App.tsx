@@ -14,13 +14,12 @@ import UpdateNotification from './components/UpdateNotification';
 type ToolType = 'compress' | 'convert' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'numbers' | 'rotate' | 'ocr' | null;
 
 const RELEASE_NOTES = {
-  version: 'v2.7.1',
+  version: 'v2.8.0',
   notes: [
-    'Critical Fix: Service Worker Installation',
-    'Resolved CORS errors for Offline Mode',
-    'Optimized App Icon Caching',
-    'Improved Startup Speed',
-    'Minor UI Enhancements'
+    'Fixed update notification vanishing issue',
+    'New "Quality Check" in Compress Tool',
+    'Improved compression stability on mobile',
+    'Reduced memory usage for large files'
   ]
 };
 

@@ -1,5 +1,5 @@
 // Increment this version string to force an update on user devices
-const APP_VERSION = 'v2.7.1';
+const APP_VERSION = 'v2.8.0';
 const CACHE_NAME = `pdf-toolkit-${APP_VERSION}`;
 
 // STRICT: Only cache LOCAL files during install.
@@ -11,7 +11,7 @@ const ASSETS_TO_CACHE = [
 ];
 
 self.addEventListener('install', (event) => {
-  self.skipWaiting(); 
+  // REMOVED: self.skipWaiting();  
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       // We use Promise.allSettled or individual catches to ensure that if one file 
