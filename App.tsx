@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useRef } from 'react';
 import CompressTool from './components/CompressTool';
 import ImageConverterTool from './components/ImageConverterTool';
@@ -15,12 +14,12 @@ import UpdateNotification from './components/UpdateNotification';
 type ToolType = 'compress' | 'convert' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'numbers' | 'rotate' | 'ocr' | null;
 
 const RELEASE_NOTES = {
-  version: 'v2.6.0',
+  version: 'v2.7.0',
   notes: [
-    'Fixed Service Worker Installation Error',
-    'Prevented Crash in PDF Compress Tool',
-    'Improved Offline Reliability',
-    'Memory Optimizations for Large Files'
+    'Critical Fix: Service Worker Installation',
+    'Resolved CORS errors for Offline Mode',
+    'Optimized App Icon Caching',
+    'Improved Startup Speed'
   ]
 };
 

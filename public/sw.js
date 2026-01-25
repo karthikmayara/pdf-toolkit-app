@@ -1,41 +1,71 @@
 // Increment this version string to force an update on user devices
-const APP_VERSION = 'v1.17.0';
+const APP_VERSION = 'v2.7.0';
 const CACHE_NAME = `pdf-toolkit-${APP_VERSION}`;
 
+// STRICT: Only cache LOCAL files during install.
+// Do NOT put CDNs here. They cause CORS errors that kill the installation.
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
-  './manifest.json',
-  './assets/index.js', // The main application bundle built by Vite
-  'https://cdn.tailwindcss.com',
-  'https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',
-  'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'
+  './manifest.json'
 ];
 
 self.addEventListener('install', (event) => {
+  self.skipWaiting(); 
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE);
+      // We use Promise.allSettled or individual catches to ensure that if one file 
+      // (like a missing icon) fails, it doesn't crash the entire Service Worker installation.
+      return Promise.all(
+        ASSETS_TO_CACHE.map(url => {
+          return cache.add(url).catch(err => {
+            console.warn(`Failed to cache ${url} during install:`, err);
+          });
+        })
+      );
     })
   );
 });
 
 self.addEventListener('fetch', (event) => {
-  /// Cache-first strategy for CDN libraries and Assets to ensure offline access
-  if (
-    event.request.url.includes('cdn') || 
-    event.request.url.includes('unpkg') || 
-    event.request.url.includes('cdnjs') ||
-    event.request.url.includes('assets/') // Cache local assets
-  ) {
+  const url = event.request.url;
+  
+  // Logic to identify third-party assets (CDNs)
+  const isCdn = url.includes('cdn') || 
+                url.includes('unpkg') || 
+                url.includes('cdnjs') ||
+                url.includes('fonts.googleapis') ||
+                url.includes('fonts.gstatic');
+  
+  // Logic for local assets
+  const isLocalAsset = url.includes('icons/') || 
+                       url.includes('manifest.json') || 
+                       url.includes('assets/');
+
+  // Strategy: Stale-While-Revalidate for CDNs and Assets
+  // This allows the app to load instantly from cache, while updating in the background.
+  if (isCdn || isLocalAsset) {
     event.respondWith(
       caches.match(event.request).then((cachedResponse) => {
-        if (cachedResponse) return cachedResponse;
+        // 1. Return cached response immediately if found
+        if (cachedResponse) {
+            // Background update (lazy cache) - keep cache fresh
+            fetch(event.request).then((response) => {
+                if (response && response.status === 200) {
+                    const responseToCache = response.clone();
+                    caches.open(CACHE_NAME).then((cache) => {
+                        cache.put(event.request, responseToCache);
+                    });
+                }
+            }).catch(() => { /* mute background errors */ });
+            
+            return cachedResponse;
+        }
+        
+        // 2. If not in cache, fetch from network
         return fetch(event.request).then((response) => {
-          if (!response || response.status !== 200 || response.type !== 'basic' && response.type !== 'cors') {
+          // Cache valid responses (opaque is okay for CDNs)
+          if (!response || (response.status !== 200 && response.type !== 'opaque')) {
             return response;
           }
           const responseToCache = response.clone();
@@ -43,24 +73,35 @@ self.addEventListener('fetch', (event) => {
             cache.put(event.request, responseToCache);
           });
           return response;
+        }).catch(() => {
+           // Return undefined if offline and not cached (browser handles error)
         });
       })
     );
   } else {
-    // Network first for local files (like index.html), fallback to cache
+    // Network First for HTML/Main App to ensure version updates
     event.respondWith(
-      fetch(event.request).catch(() => caches.match(event.request))
+      fetch(event.request)
+        .then((response) => {
+           const responseToCache = response.clone();
+           caches.open(CACHE_NAME).then((cache) => {
+             cache.put(event.request, responseToCache);
+           });
+           return response;
+        })
+        .catch(() => caches.match(event.request))
     );
   }
 });
 
 self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME) {
-            console.log('Deleting old cache:', cacheName);
+            console.log('Cleaning up old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })

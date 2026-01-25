@@ -1,5 +1,5 @@
 // Increment this version string to force an update on user devices
-const APP_VERSION = 'v2.6.0';
+const APP_VERSION = 'v2.7.0';
 const CACHE_NAME = `pdf-toolkit-${APP_VERSION}`;
 
 // STRICT: Only cache LOCAL files during install.
@@ -7,17 +7,15 @@ const CACHE_NAME = `pdf-toolkit-${APP_VERSION}`;
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
-  './manifest.json',
-  './icons/icon-192.png',
-  './icons/icon-512.png'
+  './manifest.json'
 ];
 
 self.addEventListener('install', (event) => {
   self.skipWaiting(); 
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      // We use map -> catch to ensure that if one local file is missing, 
-      // it doesn't crash the entire installation.
+      // We use Promise.allSettled or individual catches to ensure that if one file 
+      // (like a missing icon) fails, it doesn't crash the entire Service Worker installation.
       return Promise.all(
         ASSETS_TO_CACHE.map(url => {
           return cache.add(url).catch(err => {
@@ -39,8 +37,10 @@ self.addEventListener('fetch', (event) => {
                 url.includes('fonts.googleapis') ||
                 url.includes('fonts.gstatic');
   
+  // Logic for local assets
   const isLocalAsset = url.includes('icons/') || 
-                       url.includes('manifest.json');
+                       url.includes('manifest.json') || 
+                       url.includes('assets/');
 
   // Strategy: Stale-While-Revalidate for CDNs and Assets
   // This allows the app to load instantly from cache, while updating in the background.
