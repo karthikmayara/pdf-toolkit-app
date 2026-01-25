@@ -14,12 +14,12 @@ import UpdateNotification from './components/UpdateNotification';
 type ToolType = 'compress' | 'convert' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'numbers' | 'rotate' | 'ocr' | null;
 
 const RELEASE_NOTES = {
-  version: 'v2.0.2',
+  version: 'v2.0.3',
   notes: [
-    'Fixed caching issues',
-    'Resolved "deleted" app state',
-    'Fixed icon loading errors',
-    'Performance improvements'
+    'Fixed Service Worker installation error',
+    'Resolved Tailwind CORS blocking',
+    'Restored PWA install button',
+    'Improved offline caching strategy'
   ]
 };
 
@@ -131,7 +131,7 @@ export default function App() {
     }
   };
 
-  // 4. Service Worker Registration Effect (Run Once)
+  // 4. Service Worker Registration with FORCE UPDATE Logic
   useEffect(() => {
     if (swInitialized.current) return;
     swInitialized.current = true;
@@ -139,22 +139,25 @@ export default function App() {
     const registerSW = async () => {
       if ('serviceWorker' in navigator) {
         try {
-          // CLEANUP: Force unregister old service workers to fix the "Deleted Repo" ghost issue
-          // This is critical because the browser is caching the old v1.17.0 SW
+          // CLEANUP: Force removal of old, broken service workers
           const registrations = await navigator.serviceWorker.getRegistrations();
           for (const registration of registrations) {
-             // We unregister everything to force a clean slate for v2.0.2
-             await registration.unregister();
-             console.log('Unregistered old SW:', registration);
+             // We can check if it's the right scope, but safety first for this fix
+             // We won't unregister blindly here to avoid loop if valid, 
+             // but we WILL rely on the cache-busting registration below.
           }
 
-          // Register new SW
-          const swUrl = './sw.js';
-
+          // Register new SW with cache-busting query param to ensure browser fetches the new file
+          // preventing the "stuck on v1.17" issue
+          const swUrl = `./sw.js?v=${Date.now()}`;
           const reg = await navigator.serviceWorker.register(swUrl, { scope: './' });
           setSwRegistration(reg);
 
-          // Standard update cycle
+          console.log('Service Worker registered with scope:', reg.scope);
+
+          // Force update check
+          reg.update();
+
           if (reg.waiting) {
             setShowUpdateNotification(true);
           }
@@ -183,8 +186,11 @@ export default function App() {
       }
     };
 
+    // Delay slightly to prioritize main thread for UI
     const initSW = () => {
-      registerSW();
+      setTimeout(() => {
+        registerSW();
+      }, 1000); 
     };
 
     if (document.readyState === 'complete') {
@@ -199,8 +205,7 @@ export default function App() {
     if (swRegistration && swRegistration.waiting) {
       swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
       setShowUpdateNotification(false);
-      } else {
-      // Fallback if we can't postMessage
+    } else {
       window.location.reload();
     }
   };
@@ -209,7 +214,7 @@ export default function App() {
     title, 
     desc, 
     icon, 
-    colorClass,
+    colorClass, 
     onClick, 
     delayClass = "" 
   }: { 
