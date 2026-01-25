@@ -1,6 +1,8 @@
-import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
+
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { ProcessStatus, SupportedFormat } from '../types';
 import { optimizeImages, OptimizationSettings, OptimizedResult, generatePreview } from '../services/imageOptimizer';
+import { ComparisonSlider } from './ComparisonSlider';
 
 // Helper for formatting bytes
 const formatBytes = (bytes: number, decimals = 2) => {
@@ -15,10 +17,9 @@ const formatBytes = (bytes: number, decimals = 2) => {
 interface OptimizerItem {
   id: string;
   file: File;
-  previewUrl: string; // This is now a thumbnail URL (blob)
-  originalUrl?: string; // Fallback or full res if needed
+  previewUrl: string; 
   status: 'idle' | 'processing' | 'done';
-  dimensions?: string; // "1920 x 1080"
+  dimensions?: string; 
 }
 
 const SUPPORTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/avif'];
@@ -26,51 +27,43 @@ const SUPPORTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/avif'];
 const ImageOptimizerTool: React.FC = () => {
   const [items, setItems] = useState<OptimizerItem[]>([]);
   const [status, setStatus] = useState<ProcessStatus>({ isProcessing: false, currentStep: '', progress: 0 });
-  
-  // Store detailed results for the "After" view
   const [detailedResults, setDetailedResults] = useState<OptimizedResult[]>([]);
-
   const [isDragging, setIsDragging] = useState(false);
   const [unsupportedFiles, setUnsupportedFiles] = useState<string[]>([]);
   
+  // Compare Modal State
+  const [compareItem, setCompareItem] = useState<{ original: string, compressed: string, filename: string } | null>(null);
+
   const [settings, setSettings] = useState<OptimizationSettings>({
     targetFormat: 'original',
     quality: 0.8,
-    maxWidth: 0 // 0 means original
+    maxWidth: 0 
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
-  
-  // Track if we need to regenerate previews due to format change
-  const [previewNeedsUpdate, setPreviewNeedsUpdate] = useState(false);
 
-  // Auto-scroll to results
   useEffect(() => {
     if (status.resultBlob && resultsRef.current) {
         resultsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [status.resultBlob]);
 
-  // Cleanup effect
   useEffect(() => {
       return () => {
           items.forEach(i => {
               if (i.previewUrl) URL.revokeObjectURL(i.previewUrl);
-              if (i.originalUrl) URL.revokeObjectURL(i.originalUrl);
           });
       };
-  }, []); // Only on unmount for safety
+  }, []);
 
   const resetState = () => {
-    items.forEach(i => {
-         URL.revokeObjectURL(i.previewUrl);
-         if(i.originalUrl) URL.revokeObjectURL(i.originalUrl);
-    });
+    items.forEach(i => URL.revokeObjectURL(i.previewUrl));
     setItems([]);
     setDetailedResults([]);
     setStatus({ isProcessing: false, currentStep: '', progress: 0, resultBlob: undefined, error: undefined });
     setUnsupportedFiles([]);
+    setCompareItem(null);
   };
 
   const handleBackToOptions = () => {
@@ -104,31 +97,25 @@ const ImageOptimizerTool: React.FC = () => {
     
     if (validFiles.length === 0) return;
 
-    // 1. Create items with placeholders first (instant feedback)
     const newItems: OptimizerItem[] = validFiles.map(f => ({
         id: Math.random().toString(36).substr(2, 9),
         file: f,
-        previewUrl: '', // Will be filled async
-        status: 'processing' // Show loading spinner initially
+        previewUrl: '', 
+        status: 'processing' 
     }));
     
     setItems(prev => [...prev, ...newItems]);
     setStatus({ isProcessing: false, currentStep: '', progress: 0 });
 
-    // 2. Generate optimized previews asynchronously
     processPreviews(newItems, settings);
   };
 
-  // Dedicated function to generate previews so we can re-use it
   const processPreviews = async (targetItems: OptimizerItem[], currentSettings: OptimizationSettings) => {
       for (const item of targetItems) {
          try {
-             // Generate optimized thumbnail
              const { previewUrl, width, height } = await generatePreview(item.file, currentSettings);
-             
              setItems(prev => prev.map(i => {
                  if (i.id === item.id) {
-                     // Revoke old URL if it exists
                      if (i.previewUrl) URL.revokeObjectURL(i.previewUrl);
                      return { 
                          ...i, 
@@ -139,8 +126,6 @@ const ImageOptimizerTool: React.FC = () => {
                  }
                  return i;
              }));
-             
-             // Small yield to keep UI responsive
              await new Promise(r => setTimeout(r, 10));
          } catch (e) {
              console.error("Preview failed for", item.file.name, e);
@@ -149,25 +134,14 @@ const ImageOptimizerTool: React.FC = () => {
       }
   };
 
-  // Re-generate previews when Format changes
-  // We use a timeout to debounce fast switching
   useEffect(() => {
       if (items.length === 0) return;
       if (status.isProcessing) return;
-
       const timer = setTimeout(() => {
-          // Only regenerate if format matters (transparency check etc)
-          // We iterate over all items to update their previews
-          // We mark them as processing silently or just update?
-          // Let's just update.
           processPreviews(items, settings);
       }, 500);
-
       return () => clearTimeout(timer);
-      // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.targetFormat]); 
-  // We intentionally omit settings.quality (visual diff is negligible on thumbnails) 
-  // and settings.maxWidth (thumbnails are already small) to save performance.
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -196,7 +170,6 @@ const ImageOptimizerTool: React.FC = () => {
 
     const totalOriginal = items.reduce((acc, i) => acc + i.file.size, 0);
 
-    // Reset status
     setItems(prev => prev.map(i => ({...i, status: 'idle'})));
     setDetailedResults([]);
 
@@ -269,9 +242,33 @@ const ImageOptimizerTool: React.FC = () => {
      URL.revokeObjectURL(url);
   };
 
-  const totalOriginalSize = useMemo(() => items.reduce((acc, i) => acc + i.file.size, 0), [items]);
+  const openCompare = (res: OptimizedResult) => {
+      // Find original file. 
+      // We rely on size matching because names might change, but robust enough for this session.
+      const originalItem = items.find(i => i.file.size === res.originalSize);
+      
+      if (originalItem) {
+          const originalUrl = URL.createObjectURL(originalItem.file);
+          const compressedUrl = URL.createObjectURL(res.blob);
+          setCompareItem({
+              original: originalUrl,
+              compressed: compressedUrl,
+              filename: res.fileName
+          });
+      } else {
+          alert("Original file not found for comparison.");
+      }
+  };
 
-  // Calculations for savings
+  const closeCompare = () => {
+      if (compareItem) {
+          URL.revokeObjectURL(compareItem.original);
+          URL.revokeObjectURL(compareItem.compressed);
+      }
+      setCompareItem(null);
+  };
+
+  const totalOriginalSize = useMemo(() => items.reduce((acc, i) => acc + i.file.size, 0), [items]);
   const savingsPercent = status.originalSize && status.compressedSize 
     ? Math.round(((status.originalSize - status.compressedSize) / status.originalSize) * 100) 
     : 0;
@@ -364,7 +361,6 @@ const ImageOptimizerTool: React.FC = () => {
                           ${item.status === 'done' ? 'ring-2 ring-green-500 border-green-500' : ''}
                         `}
                       >
-                          {/* Preview Image */}
                           {item.previewUrl ? (
                             <img 
                               src={item.previewUrl} 
@@ -374,27 +370,23 @@ const ImageOptimizerTool: React.FC = () => {
                               className={`w-full h-full object-cover transition-opacity ${item.status === 'processing' ? 'opacity-50' : 'opacity-100'}`} 
                             />
                           ) : (
-                            /* Placeholder for initial loading */
                             <div className="w-full h-full flex items-center justify-center text-slate-300">
                                <div className="w-8 h-8 border-4 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
                             </div>
                           )}
                           
-                          {/* Dimensions Badge */}
                           {item.dimensions && item.status !== 'processing' && (
                              <div className="absolute bottom-0 left-0 right-0 bg-black/60 backdrop-blur-[2px] p-1">
                                 <p className="text-[9px] text-white text-center font-mono truncate">{item.dimensions}</p>
                              </div>
                           )}
                           
-                          {/* Processing Overlay (For actual Compression step) */}
                           {item.status === 'processing' && item.previewUrl && (
                              <div className="absolute inset-0 flex items-center justify-center bg-black/30 backdrop-blur-sm">
                                 <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
                              </div>
                           )}
 
-                          {/* Done Overlay */}
                           {item.status === 'done' && (
                              <div className="absolute inset-0 flex items-center justify-center bg-green-500/20 backdrop-blur-[1px]">
                                 <div className="bg-green-500 text-white rounded-full p-1 shadow-lg animate-fade-in-up">
@@ -569,14 +561,24 @@ const ImageOptimizerTool: React.FC = () => {
                                       <span className="font-bold text-slate-700 dark:text-slate-300">{formatBytes(res.compressedSize, 0)}</span>
                                    </div>
                                 </div>
-                                <div className="text-right shrink-0">
-                                   <div className="text-xs font-bold text-green-600 dark:text-green-400">-{percent}%</div>
+                                <div className="text-right shrink-0 flex items-center gap-2">
+                                   <div className="text-xs font-bold text-green-600 dark:text-green-400 mr-2">-{percent}%</div>
+                                   
+                                   {/* Compare Button */}
+                                   <button 
+                                      onClick={() => openCompare(res)}
+                                      className="p-1.5 text-slate-500 hover:text-blue-500 dark:text-slate-400 dark:hover:text-blue-300 border border-slate-200 dark:border-slate-600 rounded hover:bg-white dark:hover:bg-slate-700 transition-all"
+                                      title="Compare"
+                                   >
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                                   </button>
+
                                    <button 
                                       onClick={() => downloadSingleResult(res)}
-                                      className="text-[10px] mt-1 text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 uppercase font-bold flex items-center gap-1 justify-end"
+                                      className="p-1.5 text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 border border-blue-200 dark:border-blue-900 rounded hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all"
+                                      title="Download"
                                    >
-                                      Download
-                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                                    </button>
                                 </div>
                             </div>
@@ -613,6 +615,28 @@ const ImageOptimizerTool: React.FC = () => {
         </div>
       </div>
       
+      {/* Comparison Modal */}
+      {compareItem && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in" onClick={closeCompare}>
+              <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden shadow-2xl relative" onClick={e => e.stopPropagation()}>
+                  <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
+                      <h3 className="font-bold text-slate-800 dark:text-white truncate max-w-[80%]">{compareItem.filename}</h3>
+                      <button onClick={closeCompare} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full transition-colors">
+                          <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                      </button>
+                  </div>
+                  <div className="flex-1 p-4 bg-slate-100 dark:bg-slate-950 flex items-center justify-center">
+                      <div className="w-full h-full max-w-3xl max-h-[600px]">
+                          <ComparisonSlider original={compareItem.original} compressed={compareItem.compressed} />
+                      </div>
+                  </div>
+                  <div className="p-3 bg-slate-50 dark:bg-slate-900 text-center text-xs text-slate-500 dark:text-slate-400">
+                      Drag slider to check visual quality
+                  </div>
+              </div>
+          </div>
+      )}
+
       <input 
         ref={fileInputRef}
         type="file" 

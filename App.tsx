@@ -14,15 +14,14 @@ import UpdateNotification from './components/UpdateNotification';
 type ToolType = 'compress' | 'convert' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'numbers' | 'rotate' | 'ocr' | null;
 
 const RELEASE_NOTES = {
-  version: 'v2.8.5',
+  version: 'v2.8.6',
   notes: [
     'Fixed update notification vanishing issue',
     'New "Quality Check" in Compress Tool',
     'Improved compression stability on mobile',
     'Reduced memory usage for large files',
     'added safeguards against corrupted PDFs',
-    'added compress pdf enhancements',
-    'added signtuare tool optimizations'
+    'added comparision slider'
   ]
 };
 
