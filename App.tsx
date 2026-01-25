@@ -14,12 +14,13 @@ import UpdateNotification from './components/UpdateNotification';
 type ToolType = 'compress' | 'convert' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'numbers' | 'rotate' | 'ocr' | null;
 
 const RELEASE_NOTES = {
-  version: 'v2.7.0',
+  version: 'v2.7.1',
   notes: [
     'Critical Fix: Service Worker Installation',
     'Resolved CORS errors for Offline Mode',
     'Optimized App Icon Caching',
     'Improved Startup Speed'
+    'Minor UI Enhancements'
   ]
 };
 
