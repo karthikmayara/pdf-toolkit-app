@@ -18,6 +18,9 @@ type PresetType = 'extreme' | 'recommended' | 'lossless' | 'custom';
 const CompressTool: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
+  const [compressedThumbnailUrl, setCompressedThumbnailUrl] = useState<string | null>(null);
+  const [showOriginalInComparison, setShowOriginalInComparison] = useState(false);
+  
   const [status, setStatus] = useState<ProcessStatus>({ isProcessing: false, currentStep: '', progress: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [activePreset, setActivePreset] = useState<PresetType>('recommended');
@@ -74,9 +77,43 @@ const CompressTool: React.FC = () => {
     generateThumb();
   }, [file]);
 
+  // Generate Compressed Thumbnail when result ready
+  useEffect(() => {
+      if (!status.resultBlob) {
+          setCompressedThumbnailUrl(null);
+          return;
+      }
+      
+      const generateCompressedThumb = async () => {
+        try {
+            const pdfjs = window.pdfjsLib;
+            const url = URL.createObjectURL(status.resultBlob!);
+            const loadingTask = pdfjs.getDocument(url);
+            const pdf = await loadingTask.promise;
+            const page = await pdf.getPage(1);
+            
+            const viewport = page.getViewport({ scale: 0.5 });
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            
+            if (ctx) {
+                await page.render({ canvasContext: ctx, viewport }).promise;
+                setCompressedThumbnailUrl(canvas.toDataURL());
+            }
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            console.warn("Result thumbnail generation failed", e);
+        }
+      };
+      generateCompressedThumb();
+  }, [status.resultBlob]);
+
   const resetState = () => {
     setFile(null);
     setThumbnailUrl(null);
+    setCompressedThumbnailUrl(null);
     setStatus({ isProcessing: false, currentStep: '', progress: 0, resultBlob: undefined, error: undefined });
     setActivePreset('recommended');
     applyPreset('recommended');
@@ -90,6 +127,7 @@ const CompressTool: React.FC = () => {
         compressedSize: undefined, 
         error: undefined
     }));
+    setCompressedThumbnailUrl(null);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -367,7 +405,7 @@ const CompressTool: React.FC = () => {
                                             <span>{settings.maxResolution}px</span>
                                         </div>
                                         <input 
-                                            type="range" min="500" max="4000" step="100"
+                                            type="range" min="500" max="3000" step="100"
                                             value={settings.maxResolution}
                                             onChange={(e) => { setSettings(s => ({ ...s, maxResolution: Number(e.target.value) })); setActivePreset('custom'); }}
                                             className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-600"
@@ -471,6 +509,37 @@ const CompressTool: React.FC = () => {
                         )}
                     </div>
                 </div>
+
+                {/* --- Comparison View Feature --- */}
+                {compressedThumbnailUrl && thumbnailUrl && (
+                    <div className="mb-8 max-w-lg mx-auto">
+                        <h4 className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-3 tracking-wider">Quality Check</h4>
+                        <div className="bg-slate-100 dark:bg-slate-900/50 p-2 rounded-2xl border border-slate-200 dark:border-slate-700">
+                            <div className="relative aspect-[3/4] rounded-xl overflow-hidden bg-white">
+                                <img 
+                                    src={showOriginalInComparison ? thumbnailUrl : compressedThumbnailUrl} 
+                                    alt="Preview" 
+                                    className="w-full h-full object-contain" 
+                                />
+                                <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-lg">
+                                    {showOriginalInComparison ? 'ORIGINAL' : 'COMPRESSED'}
+                                </div>
+                            </div>
+                            
+                            <div className="flex gap-2 mt-2">
+                                <button 
+                                    onMouseEnter={() => setShowOriginalInComparison(true)}
+                                    onMouseLeave={() => setShowOriginalInComparison(false)}
+                                    onTouchStart={() => setShowOriginalInComparison(true)}
+                                    onTouchEnd={() => setShowOriginalInComparison(false)}
+                                    className="w-full py-2 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-600 hover:bg-slate-50 shadow-sm"
+                                >
+                                    Hold to See Original
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
                   <button 
