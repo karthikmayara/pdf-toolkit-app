@@ -1,3 +1,4 @@
+
 import { SupportedFormat } from '../types';
 
 interface ProcessedFile {
@@ -51,6 +52,10 @@ export const convertFile = async (
   }
 
   const results: ProcessedFile[] = [];
+  
+  if (!window.JSZip) {
+      throw new Error("Compression library not loaded. Check internet connection.");
+  }
   const JSZip = window.JSZip;
 
   onProgress(5, 'Initializing...');
@@ -262,6 +267,9 @@ const convertImagesToPDF = async (
     onProgress: (p: number, s: string, idx?: number) => void,
     onItemDone?: (idx: number) => void
 ): Promise<Blob> => {
+    if (!window.PDFLib) {
+        throw new Error("PDF libraries not loaded. Check connection.");
+    }
     const { PDFDocument } = window.PDFLib;
     const pdfDoc = await PDFDocument.create();
     
@@ -310,6 +318,9 @@ const extractImagesFromPDF = async (
     quality: number,
     onProgress: (p: number) => void
 ): Promise<ProcessedFile[]> => {
+    if (!window.pdfjsLib) {
+        throw new Error("PDF libraries not loaded. Check connection.");
+    }
     const pdfjs = window.pdfjsLib;
     
     if (format === 'application/pdf') {

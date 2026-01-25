@@ -1,3 +1,4 @@
+
 /**
  * Service for PDF Splitting Operations
  */
@@ -64,6 +65,10 @@ export const splitPDF = async (
   pagesToKeep: Set<number>, // 0-based indices of pages to INCUDE in result
   onProgress: (progress: number, step: string) => void
 ): Promise<Blob> => {
+  if (!window.PDFLib) {
+    throw new Error("PDF libraries not loaded. Please check your internet connection.");
+  }
+
   const { PDFDocument } = window.PDFLib;
   
   if (pagesToKeep.size === 0) throw new Error("No pages selected to keep.");
@@ -113,14 +118,6 @@ export const splitPDF = async (
 
 // Render thumbnail for UI (Low Quality for Speed)
 export const renderThumbnail = async (file: File, pageIndex: number): Promise<string> => {
-    const pdfjs = window.pdfjsLib;
-    // We create a new URL for every call - Caller must revoke!
-    // Optimized: In a real app, we might cache the loadingTask, but for this tool
-    // we will rely on pdf.js caching or simple re-instantiation.
-    // To allow "virtual scrolling", we pass the file URL.
-    
-    // NOTE: For efficiency in the grid, the Component should maintain the `pdf` document object
-    // and pass it here, rather than reloading file every time.
-    // However, to keep service stateless, let's assume Component passes the PDF Document Proxy.
+    // Note: Implementation intentionally minimal for logic separation
     return ""; 
 };

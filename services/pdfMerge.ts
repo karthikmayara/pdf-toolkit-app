@@ -1,9 +1,12 @@
+
 /**
  * Service for PDF Merging Operations
  */
 
 // Helper to get page count without full parsing
 export const getPageCount = async (file: File): Promise<number> => {
+  if (!window.pdfjsLib) return 0;
+  
   const pdfjs = window.pdfjsLib;
   const url = URL.createObjectURL(file);
   try {
@@ -27,6 +30,10 @@ export const mergePDFs = async (
   files: File[],
   onProgress: (progress: number, step: string) => void
 ): Promise<MergeResult> => {
+  if (!window.PDFLib) {
+    throw new Error("PDF libraries not loaded. Please check your internet connection.");
+  }
+
   const { PDFDocument } = window.PDFLib;
   
   onProgress(5, 'Initializing PDF engine...');

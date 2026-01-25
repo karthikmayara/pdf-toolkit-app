@@ -1,3 +1,4 @@
+
 /**
  * Service to handle PDF rendering for the Signature Tool
  * and embedding the final signature into the PDF
@@ -21,6 +22,9 @@ export interface SignaturePlacement {
 
 // 1. Render a specific page of a PDF to a High-Res Image for the UI
 export const renderPdfPage = async (file: File, pageIndex: number, password?: string): Promise<RenderedPage> => {
+  if (!window.pdfjsLib) {
+      throw new Error("PDF.js library not loaded. Check internet connection.");
+  }
   const pdfjs = window.pdfjsLib;
   const url = URL.createObjectURL(file);
 
@@ -75,6 +79,9 @@ export const embedSignatures = async (
   placements: SignaturePlacement[],
   password?: string
 ): Promise<Blob> => {
+  if (!window.PDFLib) {
+      throw new Error("PDFLib library not loaded. Check internet connection.");
+  }
   const { PDFDocument } = window.PDFLib;
   
   const arrayBuffer = await file.arrayBuffer();
@@ -106,12 +113,9 @@ export const embedSignatures = async (
      const w = (p.w / 100) * pageWidth;
      
      // Calculate Height based on aspect ratio of the placement box
-     // Note: The UI maintains aspect ratio, so we can calculate height from percentage relative to page or maintain source image aspect.
-     // In SignTool, 'h' is percentage of PAGE HEIGHT.
      const h = (p.h / 100) * pageHeight;
 
      // PDF Coordinate System: (0,0) is bottom-left.
-     // We need to calculate y from bottom.
      // y = height - (yFromTop + heightOfImage)
      const y = pageHeight - yTop - h;
 
@@ -129,6 +133,10 @@ export const embedSignatures = async (
 
 // Helper to get total pages
 export const getPdfPageCount = async (file: File, password?: string): Promise<number> => {
+   if (!window.pdfjsLib) {
+       // Silent fail or return 0 is acceptable for initial check
+       return 0;
+   }
    const pdfjs = window.pdfjsLib;
    const url = URL.createObjectURL(file);
    try {

@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { ProcessStatus, SplitSettings } from '../types';
 import { splitPDF, parsePageRange, rangeSetToString } from '../services/pdfSplit';
@@ -45,6 +46,13 @@ const SplitTool: React.FC = () => {
   useEffect(() => {
     if (!file) return;
     
+    // Safety check
+    if (!window.pdfjsLib) {
+        alert("PDF library is still loading. Please try again in a few seconds.");
+        setFile(null);
+        return;
+    }
+
     const loadPdf = async () => {
        try {
            const pdfjs = window.pdfjsLib;
