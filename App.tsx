@@ -14,11 +14,11 @@ import UpdateNotification from './components/UpdateNotification';
 type ToolType = 'compress' | 'convert' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'numbers' | 'rotate' | 'ocr' | null;
 
 const RELEASE_NOTES = {
-  version: 'v2.0.1',
+  version: 'v2.0.2',
   notes: [
-    'Fixed Install App button issues',
-    'Fixed PWA Manifest structure',
-    'Improved offline caching',
+    'Fixed caching issues',
+    'Resolved "deleted" app state',
+    'Fixed icon loading errors',
     'Performance improvements'
   ]
 };
@@ -139,23 +139,22 @@ export default function App() {
     const registerSW = async () => {
       if ('serviceWorker' in navigator) {
         try {
-          // CLEANUP: Unregister any existing SWs to fix the "Deleted Repo" ghost issue
-          // This ensures we don't have a 404ing service worker trying to run
+          // CLEANUP: Force unregister old service workers to fix the "Deleted Repo" ghost issue
+          // This is critical because the browser is caching the old v1.17.0 SW
           const registrations = await navigator.serviceWorker.getRegistrations();
           for (const registration of registrations) {
-             // Optional: You could check registration.scope here, but unregistering all on this domain/path is safer
-             // given the repo recreation issue.
-             // We unregister only if it doesn't match our current expectations or just to force a clean slate.
-             // Ideally, we just let the new register call overwrite, but 'deleted' state can be sticky.
-             // We will try to unregister ONLY if we detect issues, but simpler to just register the NEW one correctly.
+             // We unregister everything to force a clean slate for v2.0.2
+             await registration.unregister();
+             console.log('Unregistered old SW:', registration);
           }
 
-          // Absolute path to public/sw.js
+          // Register new SW
           const swUrl = './sw.js';
 
           const reg = await navigator.serviceWorker.register(swUrl, { scope: './' });
           setSwRegistration(reg);
 
+          // Standard update cycle
           if (reg.waiting) {
             setShowUpdateNotification(true);
           }
@@ -200,6 +199,9 @@ export default function App() {
     if (swRegistration && swRegistration.waiting) {
       swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
       setShowUpdateNotification(false);
+      } else {
+      // Fallback if we can't postMessage
+      window.location.reload();
     }
   };
 
