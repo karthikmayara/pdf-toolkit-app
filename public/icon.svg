@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#4338ca;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="grad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#a5b4fc;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#6366f1;stop-opacity:1" />
+    </linearGradient>
+    <filter id="dropShadow" height="130%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="15"/>
+      <feOffset dx="0" dy="10" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.3"/>
+      </feComponentTransfer>
+      <feMerge> 
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/> 
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Background Shape -->
+  <rect x="32" y="32" width="448" height="448" rx="110" fill="url(#grad1)" />
+  
+  <!-- Paper Stack Icon -->
+  <g transform="translate(106, 106) scale(0.6)" filter="url(#dropShadow)">
+    <!-- Back Page -->
+    <path d="M50 0 H350 A30 30 0 0 1 380 30 V450 A30 30 0 0 1 350 480 H50 A30 30 0 0 1 20 450 V30 A30 30 0 0 1 50 0 Z" fill="#e0e7ff" opacity="0.6" transform="translate(40, -40)" />
+    
+    <!-- Middle Page -->
+    <path d="M50 0 H350 A30 30 0 0 1 380 30 V450 A30 30 0 0 1 350 480 H50 A30 30 0 0 1 20 450 V30 A30 30 0 0 1 50 0 Z" fill="#c7d2fe" opacity="0.8" transform="translate(20, -20)" />
+    
+    <!-- Front Page -->
+    <path d="M50 0 H350 A30 30 0 0 1 380 30 V450 A30 30 0 0 1 350 480 H50 A30 30 0 0 1 20 450 V30 A30 30 0 0 1 50 0 Z" fill="#ffffff" />
+    
+    <!-- Lines on Front Page -->
+    <rect x="80" y="100" width="240" height="25" rx="12.5" fill="url(#grad1)" opacity="0.2" />
+    <rect x="80" y="160" width="240" height="25" rx="12.5" fill="#4f46e5" opacity="0.1" />
+    <rect x="80" y="220" width="240" height="25" rx="12.5" fill="#4f46e5" opacity="0.1" />
+    <rect x="80" y="280" width="160" height="25" rx="12.5" fill="#4f46e5" opacity="0.1" />
+    
+    <!-- Corner Fold -->
+    <path d="M280 480 L380 380 V480 Z" fill="#e0e7ff" />
+  </g>
+</svg>

@@ -76,7 +76,7 @@
           for(let registration of registrations) {
             // We forcefully unregister to ensure the new file is fetched from the server
             // The App.tsx will re-register the correct one immediately after
-            registration.unregister();
+           // registration.unregister(); // commented out to let APP.tsx handle updates gracefully now
           }
         });
       }

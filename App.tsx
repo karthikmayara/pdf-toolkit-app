@@ -14,12 +14,12 @@ import UpdateNotification from './components/UpdateNotification';
 type ToolType = 'compress' | 'convert' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'numbers' | 'rotate' | 'ocr' | null;
 
 const RELEASE_NOTES = {
-  version: 'v2.1.0',
+  version: 'v2.2.0',
   notes: [
-    'Fixed Install App button not appearing',
-    'Fixed crashes due to cached libraries',
-    'Optimized offline mode',
-    'Improved PWA Manifest configuration'
+    'New App Icon & Brand Identity',
+    'Fixed Install App button issues',
+    'Improved PWA Manifest & Caching',
+    'Optimized offline mode'
   ]
 };
 
@@ -269,11 +269,9 @@ export default function App() {
               ) : (
                 // Home: Show Logo
                 <div className="flex items-center gap-3 cursor-pointer group" onClick={navigateHome}>
-                  <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg shadow-indigo-500/20 flex items-center justify-center text-white transform group-hover:rotate-6 transition-transform duration-300">
-                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                    </svg>
-                  </div>
+                  {/* Updated Logo using Icon Image */}
+                  <img src="./icon.svg" className="w-10 h-10 rounded-xl shadow-lg group-hover:rotate-6 transition-transform duration-300" alt="Logo" />
+                  
                   <div className="hidden sm:block">
                     <h1 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-none">
                       PDF Toolkit <span className="text-indigo-600 dark:text-indigo-400">Pro</span>
