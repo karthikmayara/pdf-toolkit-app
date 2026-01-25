@@ -14,7 +14,7 @@ import UpdateNotification from './components/UpdateNotification';
 type ToolType = 'compress' | 'convert' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'numbers' | 'rotate' | 'ocr' | null;
 
 const RELEASE_NOTES = {
-  version: 'v2.0.6',
+  version: 'v2.0.7',
   notes: [
     'Fixed Service Worker installation error',
     'Resolved Tailwind CORS blocking',

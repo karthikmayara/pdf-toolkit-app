@@ -1,13 +1,13 @@
 // Increment this version string to force an update on user devices
-const APP_VERSION = 'v2.0.6';
+const APP_VERSION = 'v2.0.7';
 const CACHE_NAME = `pdf-toolkit-${APP_VERSION}`;
 
 // ONLY cache local files during install. 
 // External CDNs are cached at runtime to prevent installation failures due to CORS/Redirects.
 const ASSETS_TO_CACHE = [
-  './',
-  './index.html',
-  './manifest.json',
+  '/',
+  '/index.html',
+  '/manifest.json',
   //'./icon.svg'
 ];
 
