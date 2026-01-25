@@ -14,7 +14,7 @@ import UpdateNotification from './components/UpdateNotification';
 type ToolType = 'compress' | 'convert' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'numbers' | 'rotate' | 'ocr' | null;
 
 const RELEASE_NOTES = {
-  version: 'v2.0.0',
+  version: 'v2.0.1',
   notes: [
     'Fixed Install App button issues',
     'Fixed PWA Manifest structure',
