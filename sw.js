@@ -1,9 +1,10 @@
 // Increment this version string to force an update on user devices
-const APP_VERSION = 'v2.0.7';
+const APP_VERSION = 'v2.1.0';
 const CACHE_NAME = `pdf-toolkit-${APP_VERSION}`;
 
 // ONLY cache local files during install. 
-// External CDNs are cached at runtime to prevent installation failures due to CORS/Redirects.
+// External CDNs are removed from here to prevent installation failures.
+// They will be cached by the fetch listener below as they are used.
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -12,7 +13,7 @@ const ASSETS_TO_CACHE = [
 ];
 
 self.addEventListener('install', (event) => {
-  // skipWaiting ensures the new SW activates immediately, replacing the broken one
+  // skipWaiting ensures the new SW activates immediately
   self.skipWaiting(); 
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -35,10 +36,9 @@ self.addEventListener('fetch', (event) => {
       caches.match(event.request).then((cachedResponse) => {
         if (cachedResponse) return cachedResponse;
         
-        // Important: For CORS requests (like scripts), we might need to handle opaque responses
+        // Important: For CORS requests (like scripts), we handle opaque responses
         return fetch(event.request).then((response) => {
-          // Allow caching of opaque responses (status 0, type 'opaque') for CDNs
-          // Standard check: response.status === 200 OR response.type === 'opaque'
+          // Allow caching of opaque responses (status 0) for CDNs
           if (!response || (response.status !== 200 && response.type !== 'opaque') || response.type === 'error') {
             return response;
           }

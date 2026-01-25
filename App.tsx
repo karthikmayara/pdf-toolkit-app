@@ -14,12 +14,12 @@ import UpdateNotification from './components/UpdateNotification';
 type ToolType = 'compress' | 'convert' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'numbers' | 'rotate' | 'ocr' | null;
 
 const RELEASE_NOTES = {
-  version: 'v2.0.7',
+  version: 'v2.1.0',
   notes: [
-    'Fixed Service Worker installation error',
-    'Resolved Tailwind CORS blocking',
-    'Restored PWA install button',
-    'Improved offline caching strategy'
+    'Fixed Install App button not appearing',
+    'Fixed crashes due to cached libraries',
+    'Optimized offline mode',
+    'Improved PWA Manifest configuration'
   ]
 };
 
