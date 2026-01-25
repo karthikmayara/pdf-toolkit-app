@@ -6,9 +6,9 @@ const CACHE_NAME = `pdf-toolkit-${APP_VERSION}`;
 // External CDNs are removed from here to prevent installation failures.
 // They will be cached by the fetch listener below as they are used.
 const ASSETS_TO_CACHE = [
-  '/',
-  '/index.html',
-  '/manifest.json',
+  './',
+  './index.html',
+  './manifest.json',
   //'./icon.svg'
 ];
 
