@@ -1,9 +1,9 @@
 // Increment this version string to force an update on user devices
-const APP_VERSION = 'v2.5.0';
+const APP_VERSION = 'v2.6.0';
 const CACHE_NAME = `pdf-toolkit-${APP_VERSION}`;
 
-// CRITICAL FIX: Only cache LOCAL files during install.
-// External files (CDNs) caused CORS errors which killed the SW installation.
+// STRICT: Only cache LOCAL files during install.
+// Do NOT put CDNs here. They cause CORS errors that kill the installation.
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -16,11 +16,11 @@ self.addEventListener('install', (event) => {
   self.skipWaiting(); 
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      // We use map to handle individual file failures gracefully
+      // Use map to ensure one missing file doesn't break the whole install
       return Promise.all(
         ASSETS_TO_CACHE.map(url => {
           return cache.add(url).catch(err => {
-            console.warn(`Failed to cache ${url}:`, err);
+            console.warn(`Failed to cache ${url} during install:`, err);
           });
         })
       );
@@ -29,20 +29,27 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  const isCdn = event.request.url.includes('cdn') || 
-                event.request.url.includes('unpkg') || 
-                event.request.url.includes('cdnjs');
+  const url = event.request.url;
   
-  const isAsset = event.request.url.includes('icons/') || 
-                  event.request.url.includes('manifest.json');
+  // Logic to identify third-party assets (CDNs)
+  const isCdn = url.includes('cdn') || 
+                url.includes('unpkg') || 
+                url.includes('cdnjs') ||
+                url.includes('fonts.googleapis') ||
+                url.includes('fonts.gstatic');
+  
+  const isLocalAsset = url.includes('icons/') || 
+                       url.includes('manifest.json') ||
+                       url.includes('assets/');
 
-  // Cache Strategy: Stale-While-Revalidate for CDNs and Assets
-  if (isCdn || isAsset) {
+  // Strategy: Stale-While-Revalidate
+  // This allows the app to load instantly from cache, while updating in the background.
+  if (isCdn || isLocalAsset) {
     event.respondWith(
       caches.match(event.request).then((cachedResponse) => {
-        // Return cached response immediately if available
+        // 1. Return cached response immediately if found
         if (cachedResponse) {
-            // Update cache in background
+            // Background update (lazy cache)
             fetch(event.request).then((response) => {
                 if (response && response.status === 200) {
                     const responseToCache = response.clone();
@@ -50,13 +57,14 @@ self.addEventListener('fetch', (event) => {
                         cache.put(event.request, responseToCache);
                     });
                 }
-            }).catch(() => {}); // Eat errors in background fetch
+            }).catch(() => { /* mute background errors */ });
+            
             return cachedResponse;
         }
         
-        // If not in cache, fetch it
+        // 2. If not in cache, fetch from network
         return fetch(event.request).then((response) => {
-          // Check if valid response. Note: Opaque responses (type 'opaque') are common for CDNs and ARE cacheable
+          // Cache valid responses (opaque is okay for CDNs)
           if (!response || (response.status !== 200 && response.type !== 'opaque')) {
             return response;
           }
@@ -65,14 +73,13 @@ self.addEventListener('fetch', (event) => {
             cache.put(event.request, responseToCache);
           });
           return response;
-        }).catch((err) => {
-           console.warn('Fetch failed', err);
-           // If offline and not in cache, we can't do anything for CDNs
+        }).catch(() => {
+           // Offline fallback could go here
         });
       })
     );
   } else {
-    // Network First for everything else (like index.html) to ensure updates
+    // Network First for HTML/Main App to ensure version updates
     event.respondWith(
       fetch(event.request)
         .then((response) => {
@@ -94,7 +101,7 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME) {
-            console.log('Deleting old cache:', cacheName);
+            console.log('Cleaning up old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })

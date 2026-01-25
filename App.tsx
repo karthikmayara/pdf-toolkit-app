@@ -14,12 +14,12 @@ import UpdateNotification from './components/UpdateNotification';
 type ToolType = 'compress' | 'convert' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'numbers' | 'rotate' | 'ocr' | null;
 
 const RELEASE_NOTES = {
-  version: 'v2.5.0',
+  version: 'v2.6.0',
   notes: [
-    'Fixed critical installation error',
-    'Resolved CORS issues with offline mode',
-    'Stabilized App Icon updates',
-    'Faster initial load'
+    'Fixed Service Worker Installation Error',
+    'Prevented Crash in PDF Compress Tool',
+    'Improved Offline Reliability',
+    'Memory Optimizations for Large Files'
   ]
 };
 
@@ -118,19 +118,15 @@ export default function App() {
     const registerSW = async () => {
       if ('serviceWorker' in navigator) {
         try {
-          // Do NOT use a timestamp query param here. It creates a new SW every load.
-          // The browser automatically checks byte-for-byte changes in sw.js.
           const swUrl = './sw.js';
           
           const reg = await navigator.serviceWorker.register(swUrl, { scope: './' });
           setSwRegistration(reg);
 
-          // Check if an update is already waiting
           if (reg.waiting) {
             setShowUpdateNotification(true);
           }
 
-          // Check for updates manually on load
           reg.update();
 
           reg.addEventListener('updatefound', () => {
@@ -144,7 +140,6 @@ export default function App() {
             }
           });
 
-          // Handle controller change (reload page when new SW takes over)
           let refreshing = false;
           navigator.serviceWorker.addEventListener('controllerchange', () => {
             if (!refreshing) {
@@ -158,7 +153,6 @@ export default function App() {
       }
     };
     
-    // Defer registration until after load to prioritize content
     if (document.readyState === 'complete') {
         registerSW();
     } else {
