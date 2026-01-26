@@ -156,30 +156,42 @@ export const compressPDF = async (
             
             // PHASE 2: Smart Hybrid Detection
             if (settings.autoDetectText) {
-                // 1. Check for Images on the page
-                // We use getOperatorList to see if any paintImageXObject commands exist.
-                const opList = await page.getOperatorList();
-                const imageOps = opList.fn.filter((fn: number) => 
-                    fn === pdfjs.OPS.paintImageXObject || 
-                    fn === pdfjs.OPS.paintImageMaskXObject ||
-                    fn === pdfjs.OPS.paintInlineImageXObject
-                );
-                
-                const hasImages = imageOps.length > 0;
-
-                if (!hasImages) {
-                    // Page has NO images. It's text/vectors only. 
-                    // Rasterizing this would INCREASE file size. Always preserve.
-                    preservePage = true;
-                } else {
-                    // Page has images. Check if it also has significant text (Hybrid document)
-                    const textContent = await page.getTextContent();
-                    const textLen = textContent.items.reduce((acc: number, item: any) => acc + item.str.length, 0);
+                try {
+                    // 1. Check for Images on the page
+                    // We use getOperatorList to see if any paintImageXObject commands exist.
+                    const opList = await page.getOperatorList();
+                    // SAFEGUARD: Ensure opList.fn exists before filtering
+                    const fnArray = (opList && opList.fn) ? opList.fn : [];
                     
-                    // Threshold: If > 100 chars, assume it's a mixed document.
-                    if (textLen > 100) {
+                    const imageOps = fnArray.filter((fn: number) => 
+                        fn === pdfjs.OPS.paintImageXObject || 
+                        fn === pdfjs.OPS.paintImageMaskXObject ||
+                        fn === pdfjs.OPS.paintInlineImageXObject
+                    );
+                    
+                    const hasImages = imageOps.length > 0;
+
+                    if (!hasImages) {
+                        // Page has NO images. It's text/vectors only. 
+                        // Rasterizing this would INCREASE file size. Always preserve.
                         preservePage = true;
+                    } else {
+                        // Page has images. Check if it also has significant text (Hybrid document)
+                        const textContent = await page.getTextContent();
+                        const textLen = textContent.items.reduce((acc: number, item: any) => acc + item.str.length, 0);
+                        
+                        // Threshold: If > 100 chars, assume it's a mixed document.
+                        if (textLen > 100) {
+                            preservePage = true;
+                        }
                     }
+                } catch (detectionError) {
+                    console.warn(`Smart detection failed for page ${i}, skipping smart logic.`, detectionError);
+                    // If detection fails, we usually want to Compress (safe default) or Preserve?
+                    // Let's assume Preserve to avoid quality loss on weird pages.
+                    // Actually, if we can't read ops, maybe we can't render it either?
+                    // Let's try to preserve it structurally.
+                    preservePage = true;
                 }
             }
 
