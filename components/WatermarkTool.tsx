@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { ProcessStatus, WatermarkSettings } from '../types';
 import { watermarkImage, watermarkPDF } from '../services/watermarkService';
@@ -16,7 +17,7 @@ const WatermarkTool: React.FC = () => {
 
   // Settings
   const [settings, setSettings] = useState<WatermarkSettings>({
-    text: 'CONFIDENTIAL',
+    text: 'MAIK',
     color: '#FF0000',
     fontSize: 60,
     opacity: 0.3,
@@ -31,6 +32,16 @@ const WatermarkTool: React.FC = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to results
+  useEffect(() => {
+    if (status.resultBlob && resultsRef.current) {
+        setTimeout(() => {
+            resultsRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
+    }
+  }, [status.resultBlob]);
 
   // Constants
   const fonts = [
@@ -94,7 +105,6 @@ const WatermarkTool: React.FC = () => {
   }, [file, previewPage]);
 
   // 3. Draw Canvas (Cheap Operation) - Triggers on Settings change or Base Image load
-  // OPTIMIZED: Uses requestAnimationFrame to debounce rapid updates (dragging/typing)
   useEffect(() => {
       if (!baseImage || !canvasRef.current) return;
       
@@ -105,7 +115,7 @@ const WatermarkTool: React.FC = () => {
           const ctx = canvas?.getContext('2d');
           if (!ctx || !baseImage) return;
 
-          // Smart Scale for preview canvas (limit max dimension to save GPU memory)
+          // Smart Scale for preview canvas
           const MAX_PREVIEW_DIM = 1200;
           let scale = 1;
           if (baseImage.width > MAX_PREVIEW_DIM || baseImage.height > MAX_PREVIEW_DIM) {
@@ -130,21 +140,13 @@ const WatermarkTool: React.FC = () => {
   }, [baseImage, settings]);
 
   const drawWatermarkOverlay = (ctx: CanvasRenderingContext2D, width: number, height: number, scale: number) => {
-      // Calculate effective font size relative to the PREVIEW canvas
-      // The settings.fontSize is based on PDF points. 
-      // We need to scale visual font size based on the ratio of preview canvas to "standard" page width.
-      
-      // Heuristic: Base scale on width relative to a 'standard' 1000px wide view
       const relativeScale = width / 1000;
       const fontSize = settings.fontSize * 2 * relativeScale; 
 
       const fontStyle = `${settings.isItalic ? 'italic' : ''} ${settings.isBold ? 'bold' : ''} ${fontSize}px "${settings.fontFamily}"`.trim();
       
       ctx.font = fontStyle;
-      const metrics = ctx.measureText(settings.text);
-      const textW = metrics.width;
-      const textH = fontSize; // approx
-
+      
       const drawText = (x: number, y: number, rot: number) => {
          ctx.save();
          ctx.translate(x, y);
@@ -157,15 +159,11 @@ const WatermarkTool: React.FC = () => {
          ctx.restore();
       };
 
-      // Positioning Logic (Standardized to Center Anchors)
-      const pX = 40 * scale; 
-      const pY = 40 * scale;
+      // Positioning Logic
       const cX = width / 2; 
       const cY = height / 2;
-      const rX = width - (40 * scale); 
-      const bY = height - (40 * scale);
 
-      let positions: {x: number, y: number}[] = [];
+      let positionsArr: {x: number, y: number}[] = [];
 
       if (settings.position === 'tiled') {
           const cols = 3; const rows = 4;
@@ -174,10 +172,9 @@ const WatermarkTool: React.FC = () => {
           
           for(let r=0; r < rows; r++) {
                 for(let c=0; c < cols; c++) {
-                    // Offset odd rows for brick pattern
                     const offsetX = (r % 2 === 0) ? 0 : xGap/2;
-                    positions.push({
-                        x: (c * xGap) + (xGap/2) + offsetX - (r%2!==0 && c===cols-1 ? width : 0), // Wrap logic simplified
+                    positionsArr.push({
+                        x: (c * xGap) + (xGap/2) + offsetX - (r%2!==0 && c===cols-1 ? width : 0),
                         y: (r * yGap) + (yGap/2)
                     });
                 }
@@ -192,17 +189,16 @@ const WatermarkTool: React.FC = () => {
           if (settings.position.includes('middle') || settings.position === 'center') y = height * 0.5;
           if (settings.position.includes('bottom')) y = height * 0.85;
 
-          positions.push({x, y});
+          positionsArr.push({x, y});
       }
       
-      // Page Selection Visibility Check (for PDF Preview)
       if (file && file.type === 'application/pdf' && settings.pageSelectMode !== 'all') {
           const p = previewPage + 1;
-          if (settings.pageSelectMode === 'odd' && p % 2 === 0) positions = [];
-          if (settings.pageSelectMode === 'even' && p % 2 !== 0) positions = [];
+          if (settings.pageSelectMode === 'odd' && p % 2 === 0) positionsArr = [];
+          if (settings.pageSelectMode === 'even' && p % 2 !== 0) positionsArr = [];
       }
 
-      positions.forEach(p => drawText(p.x, p.y, settings.rotation));
+      positionsArr.forEach(p => drawText(p.x, p.y, settings.rotation));
   };
 
 
@@ -211,6 +207,14 @@ const WatermarkTool: React.FC = () => {
       setFile(e.target.files[0]);
       setStatus({ isProcessing: false, currentStep: '', progress: 0, resultBlob: undefined });
     }
+    if (e.target) e.target.value = '';
+  };
+
+  const resetState = () => {
+      setFile(null);
+      setBaseImage(null);
+      setNumPages(0);
+      setStatus({ isProcessing: false, currentStep: '', progress: 0 });
   };
 
   const handleStart = async () => {
@@ -265,362 +269,353 @@ const WatermarkTool: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto animate-fade-in pb-12">
-      <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl overflow-hidden border border-slate-100 dark:border-slate-700 flex flex-col md:flex-row h-auto min-h-screen md:min-h-0 md:h-[calc(100vh-120px)]">
-            
-            {/* LEFT: Preview Area */}
-            <div className="h-[50vh] md:h-full md:w-7/12 bg-slate-100 dark:bg-slate-900/50 relative flex flex-col border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-700 transition-colors">
-                
-                {/* Preview Header */}
-                <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-10 pointer-events-none">
-                     <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur px-3 py-1.5 rounded-full text-xs font-bold shadow-sm pointer-events-auto text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
-                        {file ? 'Live Preview' : 'No File Selected'}
-                     </div>
-                     {file && (
-                         <button 
-                            onClick={() => setFile(null)} 
-                            className="bg-white/90 dark:bg-slate-900/90 backdrop-blur p-2 rounded-full shadow-sm text-red-500 hover:text-red-600 pointer-events-auto transition-transform hover:scale-110 border border-slate-200 dark:border-slate-700"
-                            title="Remove File"
-                         >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                         </button>
-                     )}
-                </div>
+    <div className="max-w-7xl mx-auto animate-fade-in pb-12 px-4 sm:px-6">
+      
+      {/* Main Container */}
+      <div className="bg-[#0f172a] text-white rounded-[2rem] shadow-2xl overflow-hidden min-h-[600px] flex flex-col md:flex-row relative">
+        
+        {/* Close/Reset Button */}
+        {file && !status.isProcessing && (
+            <button 
+                onClick={resetState}
+                className="absolute top-4 right-4 z-50 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center backdrop-blur-md transition-all"
+                title="Close / Reset"
+            >
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        )}
 
-                {/* Canvas Container */}
-                <div className="flex-1 overflow-hidden relative flex items-center justify-center p-4 md:p-8">
-                    {!file ? (
-                        <div 
-                            onClick={() => fileInputRef.current?.click()}
-                            className="border-4 border-dashed border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-slate-800 rounded-2xl p-8 md:p-12 text-center cursor-pointer transition-all w-full max-w-sm group"
-                        >
-                            <div className="w-16 h-16 md:w-20 md:h-20 bg-blue-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform text-blue-600 dark:text-blue-400">
-                                <span className="text-3xl md:text-4xl">🛡️</span>
-                            </div>
-                            <h3 className="text-xl md:text-2xl font-bold text-slate-700 dark:text-slate-200 mb-2">Drop PDF or Image</h3>
-                            <p className="text-sm text-slate-500 dark:text-slate-400">Add custom stamp securely</p>
-                        </div>
-                    ) : (
-                        <div className="relative shadow-2xl rounded-lg overflow-hidden max-h-full border border-slate-200 dark:border-slate-700">
-                             {/* Canvas Background */}
-                             <div className="bg-[url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAMUlEQVQ4T2NkYGAQYcAP3uCTZhw1gGGYhAGBZIA/nYDCgBDAm9BGDWAAJyRCgLaBCAAgXwixzAS0pgAAAABJRU5ErkJggg==')]">
-                                <canvas ref={canvasRef} className="max-w-full max-h-full block" />
-                             </div>
+        {/* LEFT COLUMN: PREVIEW STAGE */}
+        <div 
+            className={`
+                relative md:w-7/12 min-h-[400px] md:min-h-full transition-all duration-500 overflow-hidden flex flex-col
+                ${!file ? 'bg-gradient-to-br from-indigo-900 to-[#0f172a] items-center justify-center' : 'bg-black/30'}
+            `}
+        >
+            {!file ? (
+                <div 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="text-center p-8 cursor-pointer transition-transform duration-300 hover:scale-105"
+                >
+                    <div className="w-32 h-32 bg-indigo-500/20 rounded-full flex items-center justify-center mx-auto mb-6 backdrop-blur-sm border border-indigo-500/30">
+                        <svg className="w-12 h-12 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                    </div>
+                    <h3 className="text-2xl font-bold tracking-tight mb-2">Upload to Watermark</h3>
+                    <p className="text-indigo-200/60 text-sm font-medium uppercase tracking-widest">PDF or Image</p>
+                </div>
+            ) : (
+                <>
+                    {/* Canvas Container */}
+                    <div className="flex-1 overflow-hidden relative flex items-center justify-center p-8">
+                        <div className="relative shadow-2xl transition-all duration-300 max-w-full max-h-full">
+                             {/* Transparent Checkerboard Background */}
+                             <div className="absolute inset-0 bg-[url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAMUlEQVQ4T2NkYGAQYcAP3uCTZhw1gGGYhAGBZIA/nYDCgBDAm9BGDWAAJyRCgLaBCAAgXwixzAS0pgAAAABJRU5ErkJggg==')] opacity-10"></div>
+                             
+                             <canvas ref={canvasRef} className="max-w-full max-h-[70vh] block relative z-10 rounded shadow-lg" />
                              
                              {/* Loading Overlay */}
                              {isRenderingBase && (
-                                 <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center flex-col text-white gap-2">
-                                     <div className="animate-spin w-8 h-8 border-4 border-white border-t-transparent rounded-full"></div>
-                                     <span className="text-xs font-bold">Rendering Page...</span>
+                                 <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center flex-col text-white gap-3 z-20">
+                                     <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                                     <span className="text-[10px] uppercase font-bold tracking-widest">Rendering...</span>
                                  </div>
                              )}
                         </div>
-                    )}
-                </div>
-
-                {/* PDF Navigation Controls */}
-                {file && file.type === 'application/pdf' && (
-                    <div className="h-14 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex items-center justify-center gap-6 shrink-0 transition-colors z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.05)]">
-                        <button 
-                           onClick={() => setPreviewPage(Math.max(0, previewPage - 1))}
-                           disabled={previewPage === 0 || isRenderingBase}
-                           className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-30 transition-colors text-slate-600 dark:text-slate-300"
-                        >
-                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
-                        </button>
-                        <span className="font-bold font-mono text-sm text-slate-700 dark:text-slate-200">
-                            Page {previewPage + 1} / {numPages}
-                        </span>
-                        <button 
-                           onClick={() => setPreviewPage(Math.min(numPages - 1, previewPage + 1))}
-                           disabled={previewPage === numPages - 1 || isRenderingBase}
-                           className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-30 transition-colors text-slate-600 dark:text-slate-300"
-                        >
-                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
-                        </button>
                     </div>
-                )}
+
+                    {/* Navigation Bar (PDF Only) */}
+                    {file.type === 'application/pdf' && (
+                        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-[#0f172a]/90 backdrop-blur-md border border-white/10 px-6 py-3 rounded-full flex items-center gap-6 shadow-xl z-30">
+                            <button 
+                               onClick={() => setPreviewPage(Math.max(0, previewPage - 1))}
+                               disabled={previewPage === 0 || isRenderingBase}
+                               className="hover:text-indigo-400 disabled:opacity-30 transition-colors"
+                            >
+                               ◀
+                            </button>
+                            <span className="font-mono text-xs font-bold text-slate-200">
+                                PAGE {previewPage + 1} / {numPages}
+                            </span>
+                            <button 
+                               onClick={() => setPreviewPage(Math.min(numPages - 1, previewPage + 1))}
+                               disabled={previewPage === numPages - 1 || isRenderingBase}
+                               className="hover:text-indigo-400 disabled:opacity-30 transition-colors"
+                            >
+                               ▶
+                            </button>
+                        </div>
+                    )}
+                </>
+            )}
+        </div>
+
+        {/* RIGHT COLUMN: CONTROLS */}
+        <div className="md:w-5/12 p-8 md:p-10 flex flex-col relative bg-[#0f172a] z-10 border-t md:border-t-0 md:border-l border-white/5">
+            
+            {/* Header */}
+            <div className="mb-8">
+                <div className="flex items-center gap-3 mb-2 text-indigo-400 font-bold text-xs tracking-[0.2em] uppercase">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                    Protect & Brand
+                </div>
+                <h2 className="text-4xl md:text-5xl font-black text-white leading-[0.9] tracking-tighter">
+                    WATERMARK
+                </h2>
             </div>
 
-            {/* RIGHT: Settings Panel */}
-            <div className="md:w-5/12 bg-white dark:bg-slate-800 flex flex-col h-full overflow-hidden transition-colors">
-                
-                {/* Tabs */}
-                <div className="flex border-b border-slate-100 dark:border-slate-700 shrink-0">
-                    {['content', 'style', 'position', 'pages'].map((tab) => (
-                        <button
-                            key={tab}
-                            onClick={() => setActiveTab(tab as any)}
-                            disabled={!file && tab !== 'content'} // Disable other tabs if no file
-                            className={`flex-1 py-4 text-xs font-bold uppercase tracking-wider transition-colors relative
-                                ${activeTab === tab 
-                                    ? 'text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-slate-700/50' 
-                                    : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}
-                                ${(!file && tab !== 'content') ? 'opacity-50 cursor-not-allowed' : ''}
-                            `}
-                        >
-                            {tab}
-                            {activeTab === tab && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400"></div>}
-                        </button>
-                    ))}
-                </div>
-
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
-                     
-                     {/* TAB: CONTENT */}
-                     {activeTab === 'content' && (
-                         <div className="space-y-6 animate-fade-in">
-                            {/* Text Input */}
-                            <div>
-                                <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-2">Watermark Text</label>
-                                <input 
-                                    type="text"
-                                    value={settings.text}
-                                    onChange={(e) => setSettings(s => ({...s, text: e.target.value}))}
-                                    className="w-full p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl font-bold text-lg text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-blue-500 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600"
-                                    placeholder="e.g. DRAFT"
-                                />
-                            </div>
-
-                            {/* Color Picker */}
-                            <div>
-                                <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-3">Color</label>
-                                <div className="flex flex-wrap gap-3">
-                                    {colorPresets.map(c => (
-                                        <button 
-                                            key={c}
-                                            onClick={() => setSettings(s => ({...s, color: c}))}
-                                            className={`w-10 h-10 rounded-full border-2 shadow-sm transition-transform hover:scale-110 ${settings.color === c ? 'border-blue-500 scale-110 ring-2 ring-blue-200 dark:ring-blue-900' : 'border-slate-200 dark:border-slate-600'}`}
-                                            style={{ backgroundColor: c }}
-                                        />
-                                    ))}
-                                    <label className="w-10 h-10 rounded-full border-2 border-slate-200 dark:border-slate-600 flex items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 bg-white dark:bg-slate-800 overflow-hidden relative">
-                                        <input 
-                                            type="color" 
-                                            value={settings.color}
-                                            onChange={(e) => setSettings(s => ({...s, color: e.target.value}))}
-                                            className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
-                                        />
-                                        <span className="text-lg">🎨</span>
-                                    </label>
-                                </div>
-                            </div>
-
-                            {/* Font Family */}
-                            <div>
-                                <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-2">Typography</label>
-                                <div className="space-y-2">
-                                    <select 
-                                        value={settings.fontFamily}
-                                        onChange={(e) => setSettings(s => ({...s, fontFamily: e.target.value}))}
-                                        className="w-full p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-blue-500"
+            {!status.resultBlob ? (
+                <div className={`flex-1 flex flex-col min-h-0 ${status.isProcessing ? 'opacity-50 pointer-events-none' : ''}`}>
+                    
+                    {file && (
+                        <>
+                            {/* Tabs */}
+                            <div className="flex border-b border-white/10 mb-6 shrink-0">
+                                {['content', 'style', 'position', 'pages'].map((tab) => (
+                                    <button
+                                        key={tab}
+                                        onClick={() => setActiveTab(tab as any)}
+                                        disabled={!file && tab !== 'content'}
+                                        className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition-all relative
+                                            ${activeTab === tab 
+                                                ? 'text-indigo-400' 
+                                                : 'text-slate-500 hover:text-slate-300'}
+                                        `}
                                     >
-                                        {fonts.map(f => <option key={f.name} value={f.name}>{f.label}</option>)}
-                                    </select>
-                                    
-                                    <div className="flex gap-2">
-                                        <button 
-                                            onClick={() => setSettings(s => ({...s, isBold: !s.isBold}))} 
-                                            className={`flex-1 py-3 rounded-xl font-bold transition-all border ${settings.isBold ? 'bg-blue-50 dark:bg-slate-700 border-blue-500 text-blue-600 dark:text-blue-400' : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-600 text-slate-500 hover:bg-slate-100'}`}
-                                        >
-                                            Bold
-                                        </button>
-                                        <button 
-                                            onClick={() => setSettings(s => ({...s, isItalic: !s.isItalic}))} 
-                                            className={`flex-1 py-3 rounded-xl italic transition-all border ${settings.isItalic ? 'bg-blue-50 dark:bg-slate-700 border-blue-500 text-blue-600 dark:text-blue-400' : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-600 text-slate-500 hover:bg-slate-100'}`}
-                                        >
-                                            Italic
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                         </div>
-                     )}
-
-                     {/* TAB: STYLE */}
-                     {activeTab === 'style' && (
-                        <div className="space-y-8 animate-fade-in">
-                            {/* Opacity */}
-                            <div>
-                                <div className="flex justify-between mb-2">
-                                    <label className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400">Transparency</label>
-                                    <span className="text-xs font-mono bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded">{Math.round(settings.opacity * 100)}%</span>
-                                </div>
-                                <input type="range" min="0.1" max="1" step="0.1" value={settings.opacity} onChange={(e) => setSettings(s => ({...s, opacity: Number(e.target.value)}))} className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600" />
+                                        {tab}
+                                        {activeTab === tab && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]"></div>}
+                                    </button>
+                                ))}
                             </div>
 
-                            {/* Size */}
-                            <div>
-                                <div className="flex justify-between mb-2">
-                                    <label className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400">Font Size</label>
-                                    <span className="text-xs font-mono bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded">{settings.fontSize}px</span>
-                                </div>
-                                <input type="range" min="20" max="200" step="5" value={settings.fontSize} onChange={(e) => setSettings(s => ({...s, fontSize: Number(e.target.value)}))} className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600" />
-                            </div>
+                            {/* Scrollable Content Area */}
+                            <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 mb-6">
+                                
+                                {/* CONTENT TAB */}
+                                {activeTab === 'content' && (
+                                    <div className="space-y-5 animate-fade-in">
+                                        <div>
+                                            <label className="text-[10px] font-bold uppercase text-slate-500 mb-2 block tracking-wider">Text</label>
+                                            <input 
+                                                type="text"
+                                                value={settings.text}
+                                                onChange={(e) => setSettings(s => ({...s, text: e.target.value}))}
+                                                className="w-full bg-[#1e293b] border border-white/10 rounded-xl p-3 text-white font-bold focus:outline-none focus:border-indigo-500 transition-colors"
+                                                placeholder="e.g. CONFIDENTIAL"
+                                            />
+                                        </div>
 
-                            {/* Rotation */}
-                            <div>
-                                <div className="flex justify-between mb-2">
-                                    <label className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400">Rotation</label>
-                                    <span className="text-xs font-mono bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded">{settings.rotation}°</span>
-                                </div>
-                                <input type="range" min="-180" max="180" step="5" value={settings.rotation} onChange={(e) => setSettings(s => ({...s, rotation: Number(e.target.value)}))} className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600" />
-                                <div className="flex justify-between mt-2 text-[10px] text-slate-400 font-mono">
-                                    <span>-180°</span>
-                                    <span className="cursor-pointer hover:text-blue-500" onClick={() => setSettings(s => ({...s, rotation: 0}))}>0° (Reset)</span>
-                                    <span>180°</span>
-                                </div>
-                            </div>
-                        </div>
-                     )}
+                                        <div>
+                                            <label className="text-[10px] font-bold uppercase text-slate-500 mb-2 block tracking-wider">Color</label>
+                                            <div className="flex flex-wrap gap-3">
+                                                {colorPresets.map(c => (
+                                                    <button 
+                                                        key={c}
+                                                        onClick={() => setSettings(s => ({...s, color: c}))}
+                                                        className={`w-8 h-8 rounded-full border-2 transition-transform ${settings.color === c ? 'border-indigo-500 scale-110' : 'border-transparent hover:scale-110'}`}
+                                                        style={{ backgroundColor: c }}
+                                                    />
+                                                ))}
+                                                <label className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-500 via-purple-500 to-indigo-500 flex items-center justify-center cursor-pointer border-2 border-transparent hover:border-white transition-all">
+                                                    <input 
+                                                        type="color" 
+                                                        value={settings.color}
+                                                        onChange={(e) => setSettings(s => ({...s, color: e.target.value}))}
+                                                        className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
+                                                    />
+                                                </label>
+                                            </div>
+                                        </div>
 
-                     {/* TAB: POSITION */}
-                     {activeTab === 'position' && (
-                         <div className="space-y-6 animate-fade-in">
-                            <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-4 text-center">Placement Strategy</label>
-                            
-                            {/* Tiled Toggle */}
-                            <div 
-                                onClick={() => setSettings(s => ({...s, position: s.position === 'tiled' ? 'center' : 'tiled'}))}
-                                className={`
-                                    p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between
-                                    ${settings.position === 'tiled' 
-                                        ? 'border-blue-500 bg-blue-50 dark:bg-slate-700 dark:border-blue-500' 
-                                        : 'border-slate-200 dark:border-slate-600 hover:border-slate-300 dark:bg-slate-900'}
-                                `}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <div className="text-2xl">🧱</div>
-                                    <div>
-                                        <div className="font-bold text-sm text-slate-800 dark:text-white">Tiled Pattern</div>
-                                        <div className="text-xs text-slate-500 dark:text-slate-400">Repeat watermark across page</div>
-                                    </div>
-                                </div>
-                                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${settings.position === 'tiled' ? 'border-blue-600' : 'border-slate-300'}`}>
-                                    {settings.position === 'tiled' && <div className="w-3 h-3 bg-blue-600 rounded-full" />}
-                                </div>
-                            </div>
-
-                            {/* 3x3 Grid */}
-                            <div className={`transition-all duration-300 ${settings.position === 'tiled' ? 'opacity-50 grayscale pointer-events-none' : 'opacity-100'}`}>
-                                <div className="bg-slate-100 dark:bg-slate-900 rounded-2xl p-4 max-w-[240px] mx-auto shadow-inner border border-slate-200 dark:border-slate-700">
-                                    <div className="grid grid-cols-3 gap-3">
-                                        {positions.map(pos => (
-                                            <button
-                                                key={pos}
-                                                onClick={() => setSettings(s => ({...s, position: pos}))}
-                                                className={`
-                                                    aspect-square rounded-lg border-2 transition-all hover:scale-105 active:scale-95 flex items-center justify-center
-                                                    ${settings.position === pos 
-                                                        ? 'bg-blue-500 border-blue-600 shadow-lg scale-105' 
-                                                        : 'bg-white border-transparent hover:border-slate-300 dark:bg-slate-800 dark:border-slate-700'}
-                                                `}
-                                                title={pos}
+                                        <div>
+                                            <label className="text-[10px] font-bold uppercase text-slate-500 mb-2 block tracking-wider">Typography</label>
+                                            <select 
+                                                value={settings.fontFamily}
+                                                onChange={(e) => setSettings(s => ({...s, fontFamily: e.target.value}))}
+                                                className="w-full bg-[#1e293b] border border-white/10 rounded-xl p-3 text-xs font-bold text-white focus:outline-none focus:border-indigo-500 cursor-pointer mb-3"
                                             >
-                                                <div className={`w-2 h-2 rounded-full ${settings.position === pos ? 'bg-white' : 'bg-slate-300 dark:bg-slate-600'}`} />
-                                            </button>
+                                                {fonts.map(f => <option key={f.name} value={f.name}>{f.label}</option>)}
+                                            </select>
+                                            <div className="flex gap-2">
+                                                <button 
+                                                    onClick={() => setSettings(s => ({...s, isBold: !s.isBold}))} 
+                                                    className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wider border transition-all ${settings.isBold ? 'bg-indigo-500/20 border-indigo-500 text-indigo-400' : 'bg-[#1e293b] border-white/10 text-slate-500 hover:text-white'}`}
+                                                >
+                                                    Bold
+                                                </button>
+                                                <button 
+                                                    onClick={() => setSettings(s => ({...s, isItalic: !s.isItalic}))} 
+                                                    className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wider border transition-all ${settings.isItalic ? 'bg-indigo-500/20 border-indigo-500 text-indigo-400' : 'bg-[#1e293b] border-white/10 text-slate-500 hover:text-white'}`}
+                                                >
+                                                    Italic
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* STYLE TAB */}
+                                {activeTab === 'style' && (
+                                    <div className="space-y-6 animate-fade-in">
+                                        {[
+                                            { label: 'Opacity', key: 'opacity', min: 0.1, max: 1, step: 0.1, valDisplay: Math.round(settings.opacity * 100) + '%' },
+                                            { label: 'Size', key: 'fontSize', min: 20, max: 200, step: 5, valDisplay: settings.fontSize + 'px' },
+                                            { label: 'Rotation', key: 'rotation', min: -180, max: 180, step: 5, valDisplay: settings.rotation + '°' }
+                                        ].map((ctrl: any) => (
+                                            <div key={ctrl.key}>
+                                                <div className="flex justify-between text-[10px] font-bold uppercase text-slate-500 mb-2 tracking-wider">
+                                                    <span>{ctrl.label}</span>
+                                                    <span className="text-indigo-400">{ctrl.valDisplay}</span>
+                                                </div>
+                                                <input 
+                                                    type="range" 
+                                                    min={ctrl.min} max={ctrl.max} step={ctrl.step} 
+                                                    value={settings[ctrl.key as keyof WatermarkSettings] as number}
+                                                    onChange={(e) => setSettings(s => ({...s, [ctrl.key]: Number(e.target.value)}))}
+                                                    className="w-full h-1.5 bg-[#1e293b] rounded-full appearance-none cursor-pointer accent-indigo-500 hover:accent-indigo-400"
+                                                />
+                                            </div>
                                         ))}
                                     </div>
-                                </div>
-                                <p className="text-center text-xs text-slate-400 mt-3">Tap grid to align watermark</p>
-                            </div>
-                         </div>
-                     )}
+                                )}
 
-                     {/* TAB: PAGES */}
-                     {activeTab === 'pages' && (
-                         <div className="space-y-6 animate-fade-in">
-                            {file && file.type === 'application/pdf' ? (
-                                <>
-                                    <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl flex gap-3 items-center">
-                                        <span className="text-2xl">📑</span>
-                                        <div>
-                                            <h4 className="font-bold text-sm text-slate-800 dark:text-white">Document Info</h4>
-                                            <p className="text-xs text-slate-500 dark:text-slate-400">{numPages} Total Pages</p>
+                                {/* POSITION TAB */}
+                                {activeTab === 'position' && (
+                                    <div className="space-y-6 animate-fade-in">
+                                        <div className="flex items-center justify-between bg-[#1e293b] p-3 rounded-xl border border-white/10">
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-xl">🧱</span>
+                                                <div>
+                                                    <div className="text-xs font-bold text-white">Tiled Pattern</div>
+                                                    <div className="text-[10px] text-slate-500">Repeat across page</div>
+                                                </div>
+                                            </div>
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input type="checkbox" checked={settings.position === 'tiled'} onChange={() => setSettings(s => ({...s, position: s.position === 'tiled' ? 'center' : 'tiled'}))} className="sr-only peer" />
+                                                <div className="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-500"></div>
+                                            </label>
+                                        </div>
+
+                                        <div className={`transition-opacity duration-300 ${settings.position === 'tiled' ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
+                                            <label className="text-[10px] font-bold uppercase text-slate-500 mb-3 block tracking-wider text-center">Alignment</label>
+                                            <div className="bg-[#1e293b] rounded-xl p-4 max-w-[200px] mx-auto border border-white/10">
+                                                <div className="grid grid-cols-3 gap-2">
+                                                    {positions.map(pos => (
+                                                        <button
+                                                            key={pos}
+                                                            onClick={() => setSettings(s => ({...s, position: pos}))}
+                                                            className={`aspect-square rounded-lg border-2 transition-all flex items-center justify-center ${settings.position === pos ? 'bg-indigo-500 border-indigo-400 shadow-[0_0_10px_rgba(99,102,241,0.5)]' : 'bg-transparent border-white/10 hover:border-white/30'}`}
+                                                        >
+                                                            <div className={`w-1.5 h-1.5 rounded-full ${settings.position === pos ? 'bg-white' : 'bg-slate-500'}`} />
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
+                                )}
 
-                                    <div>
-                                        <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-3">Apply To</label>
-                                        <div className="grid grid-cols-2 gap-2 mb-4">
-                                            {(['all', 'odd', 'even', 'custom'] as const).map(mode => (
-                                                <button
-                                                    key={mode}
-                                                    onClick={() => setSettings(s => ({...s, pageSelectMode: mode}))}
-                                                    className={`py-3 px-2 text-xs font-bold rounded-xl border capitalize transition-all ${settings.pageSelectMode === mode ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900/20 dark:border-blue-500 dark:text-blue-300' : 'border-slate-200 text-slate-600 hover:border-slate-300 dark:bg-slate-900 dark:border-slate-600 dark:text-slate-400'}`}
-                                                >
-                                                    {mode} Pages
-                                                </button>
-                                            ))}
-                                        </div>
-                                        
-                                        {settings.pageSelectMode === 'custom' && (
-                                            <div className="animate-fade-in">
-                                                <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Page Range (e.g. 1-5, 8, 10)</label>
-                                                <input 
-                                                    type="text"
-                                                    value={settings.pageRange}
-                                                    onChange={(e) => setSettings(s => ({...s, pageRange: e.target.value}))}
-                                                    className="w-full p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-sm font-medium outline-none focus:border-blue-500 dark:text-white"
-                                                    placeholder="1-5, 8, 11-15"
-                                                />
+                                {/* PAGES TAB */}
+                                {activeTab === 'pages' && (
+                                    <div className="space-y-6 animate-fade-in">
+                                        {file.type === 'application/pdf' ? (
+                                            <>
+                                                <div>
+                                                    <label className="text-[10px] font-bold uppercase text-slate-500 mb-2 block tracking-wider">Apply To</label>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        {(['all', 'odd', 'even', 'custom'] as const).map(mode => (
+                                                            <button
+                                                                key={mode}
+                                                                onClick={() => setSettings(s => ({...s, pageSelectMode: mode}))}
+                                                                className={`py-3 text-[10px] font-bold uppercase tracking-wider rounded-lg border transition-all ${settings.pageSelectMode === mode ? 'bg-indigo-500/20 border-indigo-500 text-white' : 'bg-[#1e293b] border-white/10 text-slate-500 hover:text-white'}`}
+                                                            >
+                                                                {mode}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                                
+                                                {settings.pageSelectMode === 'custom' && (
+                                                    <div className="animate-fade-in">
+                                                        <label className="text-[10px] font-bold uppercase text-slate-500 mb-2 block tracking-wider">Page Range</label>
+                                                        <input 
+                                                            type="text"
+                                                            value={settings.pageRange}
+                                                            onChange={(e) => setSettings(s => ({...s, pageRange: e.target.value}))}
+                                                            className="w-full bg-[#1e293b] border border-white/10 rounded-xl p-3 text-sm text-white font-mono placeholder:text-slate-600 focus:outline-none focus:border-indigo-500"
+                                                            placeholder="e.g. 1-5, 8, 12"
+                                                        />
+                                                    </div>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <div className="bg-[#1e293b] p-6 rounded-xl border border-white/10 text-center">
+                                                <p className="text-xs text-slate-400">Page selection is not applicable for single images.</p>
                                             </div>
                                         )}
                                     </div>
-                                </>
-                            ) : (
-                                <div className="text-center p-8 text-slate-400">
-                                    <div className="text-4xl mb-2">🖼️</div>
-                                    <p className="text-sm">Page selection is not available for single image files.</p>
-                                </div>
-                            )}
-                         </div>
-                     )}
+                                )}
+                            </div>
 
-                </div>
-                
-                {/* Action Area (Sticky Bottom) */}
-                <div className="p-6 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/30 shrink-0">
-                    {status.resultBlob ? (
-                        <div className="space-y-3">
-                            <button 
-                                onClick={handleDownload}
-                                className="w-full py-4 bg-green-500 hover:bg-green-600 text-white rounded-xl font-bold text-lg shadow-lg shadow-green-200 dark:shadow-none transition-all active:scale-[0.98] flex items-center justify-center gap-2 animate-fade-in"
-                            >
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                                Download PDF
-                            </button>
-                            <button 
-                                onClick={() => setStatus({isProcessing:false, currentStep:'', progress:0})}
-                                className="w-full py-3 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                            >
-                                Edit Settings
-                            </button>
-                        </div>
-                    ) : (
-                        <div className="space-y-3">
+                            {/* Processing Bar */}
                             {status.isProcessing && (
-                                <div className="space-y-1 mb-2">
-                                    <div className="flex justify-between text-xs font-bold text-slate-500 dark:text-slate-400">
-                                        <span>{status.currentStep}</span>
+                                <div className="space-y-2 mb-4">
+                                    <div className="flex justify-between text-[10px] font-bold uppercase text-indigo-300 tracking-wider">
+                                        <span className="animate-pulse">{status.currentStep}</span>
                                         <span>{status.progress}%</span>
                                     </div>
-                                    <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                                        <div className="h-full bg-blue-500 transition-all duration-300" style={{width: `${status.progress}%`}}></div>
+                                    <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+                                        <div className="h-full bg-indigo-500 transition-all duration-300" style={{ width: `${status.progress}%` }}></div>
                                     </div>
                                 </div>
                             )}
-                            <button
-                                onClick={handleStart}
-                                disabled={status.isProcessing || !file}
-                                className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-bold text-lg shadow-lg shadow-blue-200 dark:shadow-none transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {status.isProcessing ? 'Processing...' : 'Apply Watermark'}
-                            </button>
-                        </div>
+
+                            {/* Error */}
+                            {status.error && (
+                                <p className="text-red-400 text-xs font-bold mb-4 bg-red-500/10 p-3 rounded-lg border border-red-500/20">{status.error}</p>
+                            )}
+
+                            {/* Action Button */}
+                            {!status.isProcessing && (
+                                <button 
+                                    onClick={handleStart}
+                                    className="w-full py-4 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white rounded-xl font-bold uppercase tracking-widest text-xs transition-all shadow-lg shadow-indigo-900/20 flex items-center justify-center gap-2 group"
+                                >
+                                    <span>Apply Watermark</span>
+                                    <svg className="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                                </button>
+                            )}
+                        </>
                     )}
                 </div>
-            </div>
+            ) : (
+                /* RESULT VIEW */
+                <div ref={resultsRef} className="flex flex-col h-full animate-fade-in space-y-6">
+                    <div className="flex-1 bg-[#1e293b] rounded-xl p-6 border border-white/5 flex flex-col justify-center items-center text-center">
+                        <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center mb-4 border border-green-500/20">
+                            <svg className="w-10 h-10 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        </div>
+                        <h3 className="text-xl font-bold text-white mb-1">Success!</h3>
+                        <p className="text-slate-400 text-xs">Watermark applied successfully.</p>
+                    </div>
+
+                    <div className="flex gap-4 pt-2 shrink-0">
+                        <button 
+                            onClick={handleDownload}
+                            className="flex-1 py-4 bg-white text-[#0f172a] rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-green-400 hover:text-white transition-colors shadow-lg flex items-center justify-center gap-2"
+                        >
+                            <span>Download</span>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        </button>
+                        <button 
+                            onClick={() => setStatus({isProcessing:false, currentStep:'', progress:0})}
+                            className="px-6 py-4 bg-transparent border border-slate-700 text-white rounded-xl font-bold uppercase tracking-widest text-xs hover:border-white transition-colors"
+                        >
+                            Back
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
       </div>
       
       <input ref={fileInputRef} type="file" accept=".pdf,image/*" onChange={handleFileChange} className="hidden" />

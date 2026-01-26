@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { ProcessStatus } from '../types';
 import { recognizeText, preprocessImage, SUPPORTED_LANGUAGES, PreprocessOptions } from '../services/ocrService';
@@ -36,7 +37,7 @@ const OCRTool: React.FC = () => {
       setFile(f);
       setResultText('');
       setConfidence(null);
-      setStatus({ isProcessing: false, currentStep: '', progress: 0 });
+      setStatus({ isProcessing: false, currentStep: '', progress: 0, resultBlob: undefined });
       
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       setPreviewUrl(URL.createObjectURL(f));
@@ -109,184 +110,226 @@ const OCRTool: React.FC = () => {
       setPreviewUrl(null);
       setResultText('');
       setConfidence(null);
-      setStatus({ isProcessing: false, currentStep: '', progress: 0 });
-  };
-
-  // Determine Confidence Color
-  const getConfidenceColor = (score: number) => {
-      if (score >= 80) return 'text-green-600 bg-green-50 border-green-200';
-      if (score >= 60) return 'text-amber-600 bg-amber-50 border-amber-200';
-      return 'text-red-600 bg-red-50 border-red-200';
+      setStatus({ isProcessing: false, currentStep: '', progress: 0, resultBlob: undefined, error: undefined });
   };
 
   return (
-    <div className="max-w-6xl mx-auto animate-fade-in pb-20">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden border border-slate-100 dark:border-slate-700 transition-colors">
+    <div className="max-w-7xl mx-auto animate-fade-in pb-12 px-4 sm:px-6">
+      
+      {/* Main Card Container */}
+      <div className="bg-[#0f172a] text-white rounded-[2rem] shadow-2xl overflow-hidden min-h-[600px] flex flex-col md:flex-row relative">
         
-        {/* Header */}
-        <div className="bg-gradient-to-r from-pink-500 to-rose-500 p-6 md:p-8 text-white text-center">
-          <h2 className="text-2xl md:text-3xl font-bold mb-2">Image to Text (OCR)</h2>
-          <p className="opacity-90 text-sm md:text-base">Extract text from images with AI. Supports 10+ languages.</p>
-        </div>
+        {/* Close/Reset Button (Only when file loaded) */}
+        {file && !status.isProcessing && (
+            <button 
+                onClick={resetState}
+                className="absolute top-4 right-4 z-50 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center backdrop-blur-md transition-all"
+                title="Close / Reset"
+            >
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        )}
 
-        {!file ? (
-            <div className="p-8 md:p-12">
-                <div 
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={handleDrop}
-                    className="border-4 border-dashed border-pink-200 dark:border-slate-600 hover:border-pink-400 dark:hover:border-pink-500 rounded-2xl p-10 md:p-16 text-center transition-all bg-pink-50/50 dark:bg-slate-700/30 group"
-                >
-                    <div className="text-6xl mb-6 group-hover:scale-110 transition-transform">🔍</div>
-                    <h3 className="text-2xl font-bold text-slate-700 dark:text-slate-200 mb-4">Start Scanning</h3>
-                    
-                    <div className="flex flex-col sm:flex-row gap-4 justify-center max-w-md mx-auto">
+        {/* LEFT COLUMN: VISUAL STAGE */}
+        <div 
+            className={`
+                relative md:w-1/2 min-h-[300px] md:min-h-full transition-all duration-500 overflow-hidden flex flex-col justify-center items-center
+                ${!file ? 'bg-gradient-to-br from-indigo-900 to-[#0f172a]' : 'bg-black/30'}
+            `}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={handleDrop}
+        >
+            {!file ? (
+                <div className="text-center p-8 space-y-6">
+                    <div className="w-32 h-32 bg-indigo-500/20 rounded-full flex items-center justify-center mx-auto backdrop-blur-sm border border-indigo-500/30">
+                        <svg className="w-12 h-12 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    </div>
+                    <div>
+                        <h3 className="text-2xl font-bold tracking-tight text-white mb-2">Scan Image</h3>
+                        <p className="text-indigo-200/60 text-sm font-medium uppercase tracking-widest">Extract text from photos</p>
+                    </div>
+                    <div className="flex gap-4 justify-center">
                         <button 
                             onClick={() => fileInputRef.current?.click()}
-                            className="flex-1 py-3 px-6 bg-pink-600 hover:bg-pink-700 text-white rounded-xl font-bold shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2"
+                            className="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-xl font-bold text-xs uppercase tracking-wider transition-all border border-white/5"
                         >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                            Upload Image
+                            Upload File
                         </button>
                         <button 
                             onClick={() => cameraInputRef.current?.click()}
-                            className="flex-1 py-3 px-6 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2"
+                            className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-lg shadow-indigo-500/20"
                         >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                            Use Camera
+                            Camera
                         </button>
                     </div>
-                    <p className="text-slate-500 dark:text-slate-400 mt-4 text-sm">Supports JPG, PNG, WebP</p>
                 </div>
-            </div>
-        ) : (
-            <div className="flex flex-col">
-                
-                {/* TOP: Image Preview & Settings */}
-                <div className="bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 p-4 md:p-6 flex flex-col gap-4">
-                    
-                    {/* Toolbar */}
-                    <div className="flex flex-col lg:flex-row items-center gap-3 p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-600 shadow-sm w-full">
-                        <div className="flex-1 flex gap-2 w-full lg:w-auto">
-                            <select 
-                                value={language}
-                                onChange={(e) => setLanguage(e.target.value)}
-                                disabled={status.isProcessing}
-                                className="flex-1 p-2.5 font-bold text-slate-700 dark:text-slate-200 outline-none bg-slate-50 dark:bg-slate-700 rounded-lg cursor-pointer text-sm border border-slate-200 dark:border-slate-600 focus:border-pink-500"
-                            >
-                                {SUPPORTED_LANGUAGES.map(lang => (
-                                    <option key={lang.code} value={lang.code}>
-                                        {lang.icon} {lang.name}
-                                    </option>
-                                ))}
-                            </select>
-
-                            <select 
-                                value={processMode}
-                                onChange={(e) => setProcessMode(e.target.value as any)}
-                                disabled={status.isProcessing}
-                                className="flex-1 p-2.5 font-bold text-slate-700 dark:text-slate-200 outline-none bg-slate-50 dark:bg-slate-700 rounded-lg cursor-pointer text-sm border border-slate-200 dark:border-slate-600 focus:border-pink-500"
-                                title="Image Enhancement Mode"
-                            >
-                                <option value="grayscale">Standard (Grayscale)</option>
-                                <option value="binary">Text Only (B&W)</option>
-                            </select>
-                        </div>
-                        
-                        <div className="w-px h-6 bg-slate-200 dark:bg-slate-600 hidden lg:block"></div>
-                        
-                        <div className="flex gap-2 w-full lg:w-auto">
-                            <button 
-                                onClick={() => fileInputRef.current?.click()}
-                                disabled={status.isProcessing}
-                                className="flex-1 lg:flex-none text-xs font-bold text-indigo-600 dark:text-indigo-400 px-3 hover:bg-indigo-50 dark:hover:bg-slate-700 rounded py-2.5 transition-colors whitespace-nowrap border border-transparent hover:border-indigo-100 dark:hover:border-slate-600"
-                            >
-                                Replace Image
-                            </button>
-                            <button 
-                                onClick={resetState} 
-                                className="flex-1 lg:flex-none text-xs font-bold text-red-500 px-3 hover:bg-red-50 dark:hover:bg-red-900/20 rounded py-2.5 transition-colors whitespace-nowrap border border-transparent hover:border-red-100"
-                            >
-                                Close
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="flex flex-col md:flex-row gap-6">
-                        {/* Image Viewer */}
-                        <div className="relative flex-1 bg-slate-200 dark:bg-slate-950 rounded-xl overflow-hidden border border-slate-300 dark:border-slate-700 flex items-center justify-center p-2 min-h-[300px]">
-                            <img 
-                                src={previewUrl!} 
-                                alt="Source" 
-                                className={`max-w-full max-h-[500px] object-contain shadow-lg transition-all ${status.isProcessing ? 'blur-sm opacity-50' : ''}`} 
-                            />
-                            
-                            {/* Processing Overlay */}
-                            {status.isProcessing && (
-                                <div className="absolute inset-0 flex flex-col items-center justify-center z-10 text-white drop-shadow-md bg-black/10 backdrop-blur-[1px]">
-                                    <div className="animate-spin w-12 h-12 border-4 border-white border-t-transparent rounded-full mb-4"></div>
-                                    <h3 className="text-xl font-bold animate-pulse">{status.currentStep}</h3>
-                                    <p className="font-mono">{status.progress}%</p>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Action Button */}
-                    <button 
-                        onClick={handleStart}
-                        disabled={status.isProcessing}
-                        className="w-full py-4 bg-pink-600 hover:bg-pink-700 text-white rounded-xl font-bold text-lg shadow-lg transition-all active:scale-[0.98] disabled:bg-slate-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                    >
-                       {status.isProcessing ? 'Processing...' : 'Extract Text Now'}
-                    </button>
-                </div>
-
-                {/* BOTTOM: Result Text */}
-                <div className="flex-1 flex flex-col bg-white dark:bg-slate-800 min-h-[400px]">
-                    <div className="p-3 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-700/30 shrink-0">
-                        <div className="flex items-center gap-3">
-                            <h4 className="font-bold text-slate-700 dark:text-slate-200 uppercase text-xs tracking-wide">Result</h4>
-                            {confidence !== null && (
-                                <span className={`text-xs font-bold px-2 py-0.5 rounded border ${getConfidenceColor(confidence)}`}>
-                                    Confidence: {confidence}%
-                                </span>
-                            )}
-                        </div>
-                        <div className="flex gap-2">
-                            <button 
-                                onClick={copyToClipboard}
-                                disabled={!resultText}
-                                className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${copyFeedback ? 'bg-green-500 text-white' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'}`}
-                            >
-                                {copyFeedback ? <span>✓ Copied</span> : <span>Copy Text</span>}
-                            </button>
-                            <button 
-                                onClick={downloadText}
-                                disabled={!resultText}
-                                className="px-3 py-1.5 bg-slate-800 text-white rounded-lg text-sm font-bold hover:bg-slate-900 transition-colors disabled:opacity-50"
-                            >
-                                Download
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <textarea 
-                        ref={resultRef}
-                        value={resultText}
-                        onChange={(e) => setResultText(e.target.value)}
-                        placeholder="Extracted text will appear here..."
-                        className="flex-1 w-full p-6 resize-none outline-none text-slate-900 dark:text-slate-100 dark:bg-slate-800 font-mono text-base leading-relaxed h-full min-h-[400px]"
-                        spellCheck={false}
+            ) : (
+                <div className="relative w-full h-full p-8 flex items-center justify-center">
+                    <img 
+                        src={previewUrl!} 
+                        className={`max-w-full max-h-[500px] object-contain shadow-2xl rounded-lg transition-all ${status.isProcessing ? 'blur-sm opacity-50' : 'opacity-100'}`} 
                     />
                     
-                    {status.error && (
-                        <div className="p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-300 text-sm font-bold border-t border-red-100 dark:border-red-900">
-                            Error: {status.error}
+                    {/* Processing Overlay */}
+                    {status.isProcessing && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
+                            <div className="w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                            <h3 className="text-xl font-bold text-white animate-pulse tracking-wide">{status.currentStep}</h3>
+                            <p className="font-mono text-indigo-400 mt-2">{status.progress}%</p>
                         </div>
                     )}
                 </div>
+            )}
+        </div>
+
+        {/* RIGHT COLUMN: CONTROLS & RESULT */}
+        <div className="md:w-1/2 p-8 md:p-12 flex flex-col justify-center relative bg-[#0f172a] z-10 border-t md:border-t-0 md:border-l border-white/5">
+            
+            {/* Header */}
+            <div className="mb-8 shrink-0">
+                <div className="flex items-center gap-3 mb-2 text-indigo-400 font-bold text-xs tracking-[0.2em] uppercase">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
+                    Text Extractor
+                </div>
+                <h2 className="text-5xl md:text-6xl font-black text-white leading-[0.9] tracking-tighter">
+                    IMAGE <br/> OCR
+                </h2>
             </div>
-        )}
+
+            {!status.resultBlob ? (
+                /* CONFIGURATION VIEW */
+                <div className={`space-y-8 animate-fade-in ${status.isProcessing ? 'opacity-50 pointer-events-none' : ''}`}>
+                    {file && (
+                        <>
+                            {/* Settings */}
+                            <div className="space-y-6">
+                                {/* Language */}
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase text-slate-500 mb-2 block tracking-wider">Document Language</label>
+                                    <div className="relative">
+                                        <select 
+                                            value={language}
+                                            onChange={(e) => setLanguage(e.target.value)}
+                                            className="w-full bg-[#1e293b] text-white p-4 rounded-xl border border-white/10 outline-none appearance-none font-bold text-sm focus:border-indigo-500 transition-colors cursor-pointer"
+                                        >
+                                            {SUPPORTED_LANGUAGES.map(lang => (
+                                                <option key={lang.code} value={lang.code}>
+                                                    {lang.icon} {lang.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">▼</div>
+                                    </div>
+                                </div>
+
+                                {/* Mode Toggle */}
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase text-slate-500 mb-2 block tracking-wider">Enhancement Mode</label>
+                                    <div className="grid grid-cols-2 gap-2 bg-[#1e293b] p-1 rounded-xl border border-white/10">
+                                        <button 
+                                            onClick={() => setProcessMode('grayscale')}
+                                            className={`py-3 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${processMode === 'grayscale' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
+                                        >
+                                            Standard
+                                        </button>
+                                        <button 
+                                            onClick={() => setProcessMode('binary')}
+                                            className={`py-3 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${processMode === 'binary' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
+                                        >
+                                            Text Only (B&W)
+                                        </button>
+                                    </div>
+                                    <p className="text-[10px] text-slate-500 mt-2 ml-1">
+                                        {processMode === 'grayscale' ? 'Best for photos and documents with images.' : 'Best for scanned documents with clear text.'}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Processing Bar (Visual only, actual status handled by overlay) */}
+                            {status.isProcessing && (
+                                <div className="h-1 bg-slate-800 rounded-full overflow-hidden mt-4">
+                                    <div className="h-full bg-indigo-500 transition-all duration-300" style={{ width: `${status.progress}%` }}></div>
+                                </div>
+                            )}
+
+                            {/* Error */}
+                            {status.error && (
+                                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs font-bold">
+                                    {status.error}
+                                </div>
+                            )}
+
+                            {/* Start Button */}
+                            <button 
+                                onClick={handleStart}
+                                className="w-full py-4 bg-white text-[#0f172a] rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-indigo-400 hover:text-white transition-all shadow-lg flex items-center justify-center gap-2 group mt-4"
+                            >
+                                <span>Start Scanning</span>
+                                <svg className="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                            </button>
+                        </>
+                    )}
+                    
+                    {!file && (
+                        <div className="text-slate-500 text-sm font-medium italic opacity-50">
+                            Select an image from the left panel to begin.
+                        </div>
+                    )}
+                </div>
+            ) : (
+                /* RESULT VIEW */
+                <div className="flex flex-col h-full animate-fade-in">
+                    
+                    {/* Header: Confidence */}
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold uppercase text-slate-500 tracking-wider">Confidence Score</span>
+                            {confidence !== null && (
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${confidence > 80 ? 'bg-green-500/20 text-green-400 border-green-500/50' : (confidence > 50 ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50' : 'bg-red-500/20 text-red-400 border-red-500/50')}`}>
+                                    {confidence}%
+                                </span>
+                            )}
+                        </div>
+                        {copyFeedback && <span className="text-green-400 text-[10px] font-bold animate-pulse">COPIED!</span>}
+                    </div>
+
+                    {/* Text Area */}
+                    <div className="flex-1 relative group">
+                        <textarea 
+                            ref={resultRef}
+                            value={resultText}
+                            onChange={(e) => setResultText(e.target.value)}
+                            className="w-full h-full bg-[#151f32] border border-white/10 rounded-xl p-4 text-slate-300 font-mono text-xs leading-relaxed resize-none focus:outline-none focus:border-indigo-500 custom-scrollbar"
+                            spellCheck={false}
+                        />
+                        <button 
+                            onClick={copyToClipboard}
+                            className="absolute top-2 right-2 bg-white/10 hover:bg-white/20 text-white p-2 rounded-lg backdrop-blur-md opacity-0 group-hover:opacity-100 transition-all border border-white/5"
+                            title="Copy to Clipboard"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                        </button>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="grid grid-cols-2 gap-3 mt-4 shrink-0">
+                        <button 
+                            onClick={downloadText}
+                            className="py-3 bg-white text-[#0f172a] rounded-xl font-bold uppercase tracking-widest text-[10px] hover:bg-indigo-400 hover:text-white transition-all shadow-lg flex items-center justify-center gap-2"
+                        >
+                            <span>Download .TXT</span>
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        </button>
+                        <button 
+                            onClick={resetState}
+                            className="py-3 bg-transparent border border-slate-700 text-white rounded-xl font-bold uppercase tracking-widest text-[10px] hover:border-white transition-colors"
+                        >
+                            Scan New
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
       </div>
       
       {/* Hidden Inputs */}
