@@ -10,7 +10,6 @@ export const ComparisonSlider: React.FC<ComparisonSliderProps> = ({ original, co
   const containerRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
 
-  // Helper to calculate percentage based on X coordinate
   const handleMove = useCallback((clientX: number) => {
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
@@ -19,63 +18,33 @@ export const ComparisonSlider: React.FC<ComparisonSliderProps> = ({ original, co
     setSliderPosition(percent);
   }, []);
 
-  // --- MOUSE EVENTS ---
-  const onMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault(); // Prevent text selection
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
     isDragging.current = true;
+    e.currentTarget.setPointerCapture(e.pointerId);
     handleMove(e.clientX);
   };
 
-  // --- TOUCH EVENTS (Mobile Fix) ---
-  const onTouchStart = (e: React.TouchEvent) => {
-    // We don't preventDefault here to allow clicking, 
-    // but the CSS 'touch-action: none' handles the scrolling block.
-    isDragging.current = true;
-    handleMove(e.touches[0].clientX);
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDragging.current) return;
+    e.preventDefault();
+    handleMove(e.clientX);
   };
 
-  useEffect(() => {
-    // Global Listeners for dragging outside the component
-    const onMouseUp = () => { isDragging.current = false; };
-    const onMouseMove = (e: MouseEvent) => {
-      if (isDragging.current) {
-        e.preventDefault();
-        handleMove(e.clientX);
-      }
-    };
-    
-    const onTouchEnd = () => { isDragging.current = false; };
-    const onTouchMove = (e: TouchEvent) => {
-      if (isDragging.current) {
-        // Critical: Prevent scrolling while dragging slider on mobile
-        if (e.cancelable) e.preventDefault(); 
-        handleMove(e.touches[0].clientX);
-      }
-    };
-
-    // Add listeners to window to catch drags that leave the element
-    window.addEventListener('mouseup', onMouseUp);
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('touchend', onTouchEnd);
-    
-    // { passive: false } is required to allow e.preventDefault() in touchmove
-    window.addEventListener('touchmove', onTouchMove, { passive: false });
-
-    return () => {
-      window.removeEventListener('mouseup', onMouseUp);
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('touchend', onTouchEnd);
-      window.removeEventListener('touchmove', onTouchMove);
-    };
-  }, [handleMove]);
+  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    isDragging.current = false;
+    e.currentTarget.releasePointerCapture(e.pointerId);
+  };
 
   return (
     <div 
       ref={containerRef} 
       className="relative w-full h-full select-none overflow-hidden cursor-col-resize group touch-none"
-      style={{ touchAction: 'none' }} // Explicitly disable browser handling of gestures
-      onMouseDown={onMouseDown}
-      onTouchStart={onTouchStart}
+      style={{ touchAction: 'none' }} 
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerLeave={onPointerUp}
     >
       {/* Background Layer (Original) */}
       <img 
