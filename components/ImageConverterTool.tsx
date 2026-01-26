@@ -30,7 +30,6 @@ const SUPPORTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/p
 const ImageConverterTool: React.FC = () => {
   const [items, setItems] = useState<ExtendedConversionItem[]>([]);
   const [status, setStatus] = useState<ProcessStatus>({ isProcessing: false, currentStep: '', progress: 0 });
-  const [isDragging, setIsDragging] = useState(false);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [draggedItemIndex, setDraggedItemIndex] = useState<number | null>(null);
   
@@ -74,7 +73,7 @@ const ImageConverterTool: React.FC = () => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       addFiles(Array.from(e.target.files));
-      setStatus({ isProcessing: false, currentStep: '', progress: 0 });
+      setStatus(prev => ({ ...prev, error: undefined }));
     }
     if (e.target) e.target.value = '';
   };
@@ -87,7 +86,7 @@ const ImageConverterTool: React.FC = () => {
     setIsDraggingFile(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       addFiles(Array.from(e.dataTransfer.files));
-      setStatus({ isProcessing: false, currentStep: '', progress: 0 });
+      setStatus(prev => ({ ...prev, error: undefined }));
     }
   };
 
@@ -146,11 +145,8 @@ const ImageConverterTool: React.FC = () => {
 
   const setAllFormats = (format: SupportedFormat) => {
       setItems(prev => prev.map(item => ({ ...item, targetFormat: format })));
-      if (format === 'application/pdf') {
-          setSettings(s => ({ ...s, mergeToPdf: true }));
-      } else {
-          setSettings(s => ({ ...s, mergeToPdf: false }));
-      }
+      // Smart Toggle: If user selects PDF globally, check if we should default to merge?
+      // For now, let's just leave the toggle manual but ensure it's visible.
   };
 
   // Internal Drag (Reordering)
@@ -186,7 +182,8 @@ const ImageConverterTool: React.FC = () => {
         isProcessing: true, 
         currentStep: 'Starting...', 
         progress: 0,
-        originalSize: totalSize 
+        originalSize: totalSize,
+        error: undefined
     });
 
     try {
@@ -223,7 +220,7 @@ const ImageConverterTool: React.FC = () => {
       setStatus(prev => ({ 
         ...prev, 
         isProcessing: false, 
-        error: error.message || 'Conversion failed.' 
+        error: error.message || 'Conversion failed. Please check your internet connection if resources need loading.' 
       }));
     }
   };
@@ -241,9 +238,9 @@ const ImageConverterTool: React.FC = () => {
   };
 
   // Stats
-  const totalOriginalSize = useMemo(() => items.reduce((acc, i) => acc + i.file.size, 0), [items]);
   const pdfTargetsCount = items.filter(i => i.targetFormat === 'application/pdf').length;
-  const showMergeOption = pdfTargetsCount > 1;
+  // Show merge option if at least 2 items are targeting PDF, OR if at least 2 items exist and we might convert them all to PDF
+  const showMergeOption = items.length > 1; 
 
   const availableFormats: {value: SupportedFormat, label: string}[] = [
     { value: 'image/jpeg', label: 'JPG' },
@@ -350,7 +347,7 @@ const ImageConverterTool: React.FC = () => {
                                         value={item.targetFormat}
                                         onChange={(e) => updateItemFormat(index, e.target.value as SupportedFormat)}
                                         disabled={status.isProcessing}
-                                        className="w-full bg-black/30 text-white text-[10px] font-bold py-1 px-2 rounded border border-white/10 focus:border-indigo-500 outline-none"
+                                        className="w-full bg-black/30 text-white text-[10px] font-bold py-1 px-2 rounded border border-white/10 focus:border-indigo-500 outline-none cursor-pointer"
                                     >
                                         <option value="image/jpeg">To JPG</option>
                                         <option value="image/png">To PNG</option>
@@ -419,7 +416,7 @@ const ImageConverterTool: React.FC = () => {
                                         <button
                                             key={fmt.value}
                                             onClick={() => setAllFormats(fmt.value)}
-                                            className={`py-2 rounded-lg text-[10px] font-bold uppercase border transition-all ${items.every(i => i.targetFormat === fmt.value) ? 'bg-indigo-500 border-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-transparent border-slate-700 text-slate-400 hover:border-slate-500 hover:text-white'}`}
+                                            className={`py-3 rounded-xl text-[10px] font-bold uppercase border transition-all ${items.every(i => i.targetFormat === fmt.value) ? 'bg-indigo-500 border-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-transparent border-slate-700 text-slate-400 hover:border-slate-500 hover:text-white'}`}
                                         >
                                             {fmt.label}
                                         </button>
@@ -431,22 +428,23 @@ const ImageConverterTool: React.FC = () => {
                             <div className="space-y-4">
                                 {/* Merge Option */}
                                 {showMergeOption && (
-                                    <div className="flex items-center justify-between bg-white/5 p-3 rounded-xl border border-white/10">
+                                    <div className="flex items-center justify-between bg-white/5 p-4 rounded-xl border border-white/10">
                                         <div>
                                             <span className="block text-xs font-bold text-white">Merge Output</span>
                                             <span className="text-[10px] text-slate-400">Combine PDFs into one file</span>
                                         </div>
                                         <label className="relative inline-flex items-center cursor-pointer">
                                             <input type="checkbox" checked={settings.mergeToPdf} onChange={(e) => setSettings(s => ({...s, mergeToPdf: e.target.checked}))} className="sr-only peer" />
-                                            <div className="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-500"></div>
+                                            <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
                                         </label>
                                     </div>
                                 )}
 
                                 {/* Quality Slider (for JPG/WEBP) */}
-                                {items.some(i => i.targetFormat === 'image/jpeg' || i.targetFormat === 'image/webp') && (
+                                {/* Show if any item is image type, or if global setting implies images */}
+                                {(items.some(i => i.targetFormat === 'image/jpeg' || i.targetFormat === 'image/webp')) && (
                                     <div className="bg-white/5 p-4 rounded-xl border border-white/10">
-                                        <div className="flex justify-between text-[10px] uppercase font-bold text-slate-400 mb-2">
+                                        <div className="flex justify-between text-[10px] uppercase font-bold text-slate-400 mb-4">
                                             <span>Image Quality</span>
                                             <span className="text-white">{Math.round(settings.quality * 100)}%</span>
                                         </div>
@@ -474,16 +472,20 @@ const ImageConverterTool: React.FC = () => {
                             )}
 
                             {/* Error */}
-                            {status.error && <p className="text-red-400 text-xs font-bold">{status.error}</p>}
+                            {status.error && (
+                                <div className="text-red-400 text-xs font-bold border border-red-500/20 bg-red-500/10 p-3 rounded-lg">
+                                    {status.error}
+                                </div>
+                            )}
 
                             {/* Action */}
                             {!status.isProcessing && (
                                 <button 
                                     onClick={handleStart}
-                                    className="w-full py-4 bg-white text-[#0f172a] rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-indigo-400 hover:text-white transition-all shadow-lg flex items-center justify-center gap-2"
+                                    className="w-full py-4 bg-white text-[#0f172a] rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-indigo-400 hover:text-white transition-all shadow-lg flex items-center justify-center gap-2 group"
                                 >
                                     <span>Start Conversion</span>
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                                    <svg className="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
                                 </button>
                             )}
                         </>
