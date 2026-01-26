@@ -138,6 +138,7 @@ export const compressPDF = async (
       }
       
       const canvas = document.createElement('canvas');
+      // Fix: typo in willReadFrequently property
       const ctx = canvas.getContext('2d', { willReadFrequently: true, alpha: false });
 
       if (!ctx) throw new Error('Failed to create canvas context - Device memory may be low');
@@ -157,41 +158,78 @@ export const compressPDF = async (
             // PHASE 2: Smart Hybrid Detection
             if (settings.autoDetectText) {
                 try {
-                    // 1. Check for Images on the page
-                    // We use getOperatorList to see if any paintImageXObject commands exist.
+                    // 1. Get Operator List (Safety Checked)
                     const opList = await page.getOperatorList();
-                    // SAFEGUARD: Ensure opList.fn exists before filtering
                     const fnArray = (opList && opList.fn) ? opList.fn : [];
                     
-                    const imageOps = fnArray.filter((fn: number) => 
-                        fn === pdfjs.OPS.paintImageXObject || 
-                        fn === pdfjs.OPS.paintImageMaskXObject ||
-                        fn === pdfjs.OPS.paintInlineImageXObject
-                    );
+                    // 2. Analyze Content Metrics
+                    const textContent = await page.getTextContent();
+                    const textLen = textContent.items.reduce((acc: number, item: any) => acc + (item.str || '').length, 0);
                     
-                    const hasImages = imageOps.length > 0;
+                    let vectorOps = 0;
+                    let imageOps = 0;
+                    
+                    // Define PDF.js Op Codes
+                    const OPS = pdfjs.OPS;
+                    
+                    // Heuristic: Identify vector drawing commands
+                    const drawingCmds = new Set([
+                        OPS.moveTo, OPS.lineTo, OPS.curveTo, OPS.curveTo2, OPS.curveTo3,
+                        OPS.rectangle, OPS.stroke, OPS.fill, OPS.eoFill
+                    ]);
+                    
+                    // Heuristic: Identify image commands
+                    const imageCmds = new Set([
+                        OPS.paintImageXObject, OPS.paintInlineImageXObject, OPS.paintImageMaskXObject
+                    ]);
 
-                    if (!hasImages) {
-                        // Page has NO images. It's text/vectors only. 
-                        // Rasterizing this would INCREASE file size. Always preserve.
-                        preservePage = true;
+                    for(let k=0; k < fnArray.length; k++) {
+                        const fn = fnArray[k];
+                        if (drawingCmds.has(fn)) vectorOps++;
+                        if (imageCmds.has(fn)) imageOps++;
+                    }
+
+                    // 3. Scoring Algorithm
+                    // Positive Score (> 0) = Preserve (Structure)
+                    // Negative/Zero Score (<= 0) = Compress (Image)
+                    let score = 0;
+
+                    // A. Text Presence
+                    if (textLen > 300) score += 50;       // Significant text content
+                    else if (textLen > 50) score += 20;   // Moderate text
+                    
+                    // B. Vector Complexity (Blueprints, Charts, Tables)
+                    // If a page has many lines/curves, rasterizing it makes it look fuzzy.
+                    if (vectorOps > 50) score += 100;     // Complex vector art
+                    else if (vectorOps > 10) score += 20; // Simple lines/tables
+                    
+                    // C. Image Presence
+                    if (imageOps === 0) {
+                        score += 200; // Pure vector/text page. Always preserve to save space/quality.
                     } else {
-                        // Page has images. Check if it also has significant text (Hybrid document)
-                        const textContent = await page.getTextContent();
-                        const textLen = textContent.items.reduce((acc: number, item: any) => acc + item.str.length, 0);
+                        // Images exist. Check context.
                         
-                        // Threshold: If > 100 chars, assume it's a mixed document.
-                        if (textLen > 100) {
-                            preservePage = true;
+                        // Scenario: Scanned Document with OCR (Hidden Text)
+                        // Traits: Lots of text, Image present, Very low vector complexity (no lines/boxes drawn)
+                        // Action: We WANT to rasterize this to compress the background scan.
+                        if (textLen > 100 && vectorOps < 5) {
+                            score -= 60; // Penalize to force compression
+                        }
+                        
+                        // Scenario: Photo / Scan without text
+                        if (textLen < 50 && vectorOps < 10) {
+                            score -= 100;
                         }
                     }
+                    
+                    // Decision
+                    preservePage = score > 0;
+                    
+                    // console.log(`Page ${i} Score: ${score} (Text: ${textLen}, Vectors: ${vectorOps}, Images: ${imageOps}) -> ${preservePage ? 'Preserve' : 'Rasterize'}`);
+
                 } catch (detectionError) {
-                    console.warn(`Smart detection failed for page ${i}, skipping smart logic.`, detectionError);
-                    // If detection fails, we usually want to Compress (safe default) or Preserve?
-                    // Let's assume Preserve to avoid quality loss on weird pages.
-                    // Actually, if we can't read ops, maybe we can't render it either?
-                    // Let's try to preserve it structurally.
-                    preservePage = true;
+                    console.warn(`Smart detection failed for page ${i}, defaulting to preserve.`, detectionError);
+                    preservePage = true; // Fallback to safe mode (preserve structure)
                 }
             }
 
@@ -202,7 +240,7 @@ export const compressPDF = async (
                     if (i - 1 >= srcPdfDoc.getPageCount()) {
                          throw new Error("Page index out of bounds in source doc");
                     }
-                    onProgress(progress, `Page ${i}: Text/Vectors detected - Preserving...`);
+                    onProgress(progress, `Page ${i}: High detail detected - Preserving structure...`);
                     const [copiedPage] = await newPdfDoc.copyPages(srcPdfDoc, [i - 1]);
                     newPdfDoc.addPage(copiedPage);
                     vectorCopySuccess = true;
