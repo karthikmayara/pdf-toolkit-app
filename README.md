@@ -1,72 +1,95 @@
 
-# 🛠️ PDF Toolkit Pro
+<div align="center">
+  <img src="./public/icon.svg" alt="PDF Toolkit Pro Logo" width="120" height="120">
+  
+  # PDF Toolkit Pro
+  
+  **The Privacy-First, Offline-Capable PDF Manipulation Suite.**
+  
+  [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+  [![Tech: React 18](https://img.shields.io/badge/Tech-React_18-61DAFB.svg)](https://reactjs.org/)
+  [![Style: Tailwind](https://img.shields.io/badge/Style-Tailwind_CSS-38B2AC.svg)](https://tailwindcss.com/)
+  [![PWA: Ready](https://img.shields.io/badge/PWA-Offline_Ready-success.svg)]()
 
-**Professional, Privacy-First PDF Manipulation Suite.**
+  <p align="center">
+    <a href="#-why-this-exists">Why?</a> •
+    <a href="#-features">Features</a> •
+    <a href="#-tech-stack">Tech Stack</a> •
+    <a href="#-getting-started">Getting Started</a>
+  </p>
+</div>
 
-> *Process documents directly in your browser. No uploads, no waiting, 100% private.*
+---
 
-## 📖 What is this?
+## 🔒 Why this exists?
 
-**PDF Toolkit Pro** is a Progressive Web Application (PWA) that provides a comprehensive set of tools to manage and modify PDF documents. Unlike mostly online PDF editors, this application runs entirely on the **client-side** (in your browser). 
+Most "free" online PDF tools operate on a simple business model: **You are the product.** You upload your sensitive bank statements, contracts, and IDs to a remote server, process them, and hope they delete the files (spoiler: they often don't).
 
-It uses powerful WebAssembly and JavaScript libraries to manipulate files locally on your device's processor, ensuring your data never leaves your computer.
+**PDF Toolkit Pro is different.** 
 
-## 🎯 Why we created it?
+It leverages modern browser capabilities (**WebAssembly**, **Service Workers**, and **Canvas API**) to process files entirely on your device.
+*   **Zero Uploads:** Your files never leave your computer.
+*   **Zero Wait:** No upload/download bars. Processing is instant.
+*   **100% Offline:** Install it as a PWA and use it on an airplane.
 
-We built this toolkit to solve three major problems with existing online PDF tools:
-
-1.  **Privacy & Security:** Most free tools require you to upload your sensitive contracts, bank statements, or ID documents to a remote server. We believe your data should stay yours.
-2.  **Reliability:** You shouldn't need a fast internet connection just to rotate a page or merge two small files.
-3.  **Speed:** Waiting for uploads and downloads is unnecessary. Local processing is instant.
+---
 
 ## ✨ Features
 
-*   **📦 Compress PDF:** Smart reduction of file size with visual quality check.
-*   **📑 Merge PDFs:** Combine multiple documents into a single file with drag-and-drop reordering.
-*   **✂️ Split PDF:** Extract specific pages or remove unwanted ones.
-*   **🔄 Convert:** Turn PDFs into Images (JPG, PNG, WebP) or create PDFs from images.
-*   **✍️ Sign PDF:** Professional signing desk with multi-signature support, date stamping, and ink simulation.
-*   **🔍 OCR (Image to Text):** Extract text from scanned images using AI (Tesseract.js).
-*   **🛡️ Watermark:** Add custom text stamps/overlays to protect your documents.
-*   **📉 Image Optimizer:** Compress images (JPG, PNG, AVIF) locally with side-by-side comparison.
-*   **🔢 Page Numbers:** Add customizable pagination to existing PDFs.
-*   **↻ Rotate:** Fix orientation issues for specific pages or the entire document.
+This isn't just a wrapper around a library. It's a full-featured suite with a premium "Lumina" UI.
 
-## 🔒 Privacy Promise
+| Tool | Description | Tech Highlight |
+| :--- | :--- | :--- |
+| **📦 Compress** | Intelligent file size reduction with visual quality checks. | Custom canvas re-rendering pipeline. |
+| **📑 Merge** | Combine unlimited PDFs with drag-and-drop reordering. | `pdf-lib` structural merging. |
+| **🔍 OCR** | Extract text from scanned images/PDFs. | `Tesseract.js` (WASM) running locally. |
+| **🔄 Convert** | Convert PDF pages to JPG/PNG/WebP/AVIF or Image to PDF. | High-performance bitmap rendering. |
+| **✍️ Digital Ink** | Sign documents with saved signatures or freehand drawing. | Coordinate mapping & vector placement. |
+| **🛡️ Watermark** | Stamp documents with text, customizable opacity & tiling. | Canvas overlay compositing. |
+| **✂️ Smart Split** | Extract specific pages or delete unwanted ranges. | Efficient byte-range extraction. |
+| **📉 Image Optimizer** | Compress JPG/PNG/WebP images for the web. | Browser-native encoding API. |
+| **🔢 Pagination** | Add customizable page numbers to existing docs. | Dynamic font embedding. |
 
-*   **Zero Knowledge:** We do not track what you upload. We do not see your files.
-*   **Local Processing:** All "uploads" are actually just loading the file into your browser's memory.
-*   **Offline First:** Once loaded, you can disconnect the internet and the app works perfectly.
+---
+
+## 🛠 Tech Stack
+
+Built for performance and maintainability.
+
+*   **Core:** React 18, TypeScript, Vite
+*   **Styling:** Tailwind CSS (Custom "Lumina" Design System)
+*   **PDF Engine:** `pdf-lib` (Structure), `pdf.js` (Rendering)
+*   **OCR Engine:** `tesseract.js` (v5 WASM)
+*   **Compression:** `fflate` (High-speed ZIP creation)
+*   **PWA:** Service Workers for offline caching and installation.
+
 
 ## 🌐 Browser Support
 
-| Browser | Status | Notes |
-| :--- | :--- | :--- |
-| **Chrome / Edge** | ✅ Excellent | Recommended for fastest performance (V8 engine). |
-| **Firefox** | ✅ Good | Works well. |
-| **Safari (macOS/iOS)** | ⚠️ Good | Large files (>50MB) may crash due to stricter memory limits on iOS. |
+The app relies on modern web APIs (OffscreenCanvas, createImageBitmap, WASM).
 
-## 🚀 How to Use
+| Browser | Status |
+| :--- | :--- |
+| **Chrome / Edge** | 🟢 **Perfect** (Recommended) |
+| **Firefox** | 🟢 **Great** |
+| **Safari** | 🟡 **Good** (Large OCR tasks may be slower) |
 
-### For Users
-1.  Open the website in Chrome, Edge, or Safari.
-2.  Click the **"Install App"** button in the header (or via the browser menu).
-3.  Launch it like a native app from your desktop or home screen.
+## 🤝 Contributing
 
-### Troubleshooting
-*   **"PDF Library loading..." forever:** Refresh the page. This usually happens if the CDN connection was interrupted during initial load.
-*   **App Crash on Large File:** If compressing a 100MB+ file on a mobile device, the browser may run out of memory. Try splitting the PDF into smaller chunks first using the Split tool.
-*   **Update Notification stuck:** Hard refresh (Ctrl+F5 or Cmd+Shift+R) to clear the Service Worker cache.
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-## 🛠️ Tech Stack
-
-*   **Frontend:** React 18
-*   **Build Tool:** Vite
-*   **Styling:** Tailwind CSS
-*   **PDF Engine:** `pdf-lib` & `pdf.js`
-*   **OCR Engine:** `tesseract.js`
-*   **Compression:** `jszip`
+1.  Fork the Project
+2.  Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3.  Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4.  Push to the Branch (`git push origin feature/AmazingFeature`)
+5.  Open a Pull Request
 
 ## 📄 License
 
-This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+Distributed under the MIT License. See `LICENSE` for more information.
+
+---
+
+<div align="center">
+  <sub>Built with ❤️ for privacy enthusiasts everywhere.</sub>
+</div>
