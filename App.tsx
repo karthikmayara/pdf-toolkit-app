@@ -14,12 +14,12 @@ import UpdateNotification from './components/UpdateNotification';
 type ToolType = 'compress' | 'convert' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'numbers' | 'rotate' | 'ocr' | null;
 
 const RELEASE_NOTES = {
-  version: 'v2.9.2',
+  version: 'v2.9.3',
   notes: [
+    '🔧 Fixed Smart Hybrid crash on single page docs',
     '🚀 Advanced Compression Controls',
     'New Resolution & Grayscale options',
-    'Enhanced Lossless Deduplication',
-    'Smart Hybrid Engine improvements'
+    'Enhanced Lossless Deduplication'
   ]
 };
 

@@ -23,11 +23,20 @@ const UpdateNotification: React.FC<UpdateNotificationProps> = ({ onUpdate, onDis
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex justify-between items-center mb-1">
-                <h4 className="font-bold text-base leading-tight">Update Ready!</h4>
+                <h4 className="font-bold text-base leading-tight">
+                    Update Ready! {version && <span className="text-indigo-500 text-xs ml-2 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-full">{version}</span>}
+                </h4>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
                 A new version has been downloaded in the background. Update now to see new features.
               </p>
+              {notes && notes.length > 0 && (
+                  <ul className="mt-2 text-[10px] text-slate-500 dark:text-slate-400 list-disc list-inside bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg">
+                      {notes.slice(0, 3).map((note, i) => (
+                          <li key={i}>{note}</li>
+                      ))}
+                  </ul>
+              )}
             </div>
           </div>
 

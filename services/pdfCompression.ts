@@ -149,6 +149,7 @@ export const compressPDF = async (
         
         let preservePage = false;
         let page: any = null;
+        let vectorCopySuccess = false;
 
         try {
             page = await pdf.getPage(i);
@@ -184,19 +185,30 @@ export const compressPDF = async (
 
             if (preservePage) {
                 // STRATEGY A: Preserve Vector Page (Smart Mode)
-                onProgress(progress, `Page ${i}: Text/Vectors detected - Preserving...`);
-                const [copiedPage] = await newPdfDoc.copyPages(srcPdfDoc, [i - 1]);
-                newPdfDoc.addPage(copiedPage);
-            } else {
-                // STRATEGY B: Rasterize & Compress (Scans/Images/Force Image Mode)
-                onProgress(progress, `Page ${i}: Compressing image content...`);
+                try {
+                    // Safety check for bounds
+                    if (i - 1 >= srcPdfDoc.getPageCount()) {
+                         throw new Error("Page index out of bounds in source doc");
+                    }
+                    onProgress(progress, `Page ${i}: Text/Vectors detected - Preserving...`);
+                    const [copiedPage] = await newPdfDoc.copyPages(srcPdfDoc, [i - 1]);
+                    newPdfDoc.addPage(copiedPage);
+                    vectorCopySuccess = true;
+                } catch (copyError) {
+                    console.warn(`Smart Mode: Failed to copy page ${i} structurally. Falling back to rasterization.`, copyError);
+                    vectorCopySuccess = false;
+                    // Proceed to Strategy B block below...
+                }
+            } 
+            
+            if (!preservePage || !vectorCopySuccess) {
+                // STRATEGY B: Rasterize & Compress (Scans/Images/Force Image Mode OR Fallback)
+                onProgress(progress, `Page ${i}: Compressing content...`);
                 
                 const unscaledViewport = page.getViewport({ scale: 1.0 });
                 const maxDim = Math.max(unscaledViewport.width, unscaledViewport.height);
                 
                 // Adaptive Resolution Scaling
-                // If user selected 2000px, and page is 800px, we scale up (or down).
-                // If setting.maxResolution is 0 (or undefined), default to 2000.
                 const targetMaxDim = settings.maxResolution || 2000;
                 let scale = targetMaxDim / maxDim;
                 
@@ -267,9 +279,9 @@ export const compressPDF = async (
                 canvas.width = 1; canvas.height = 1;
             }
 
-        } catch (pageError) {
+        } catch (pageError: any) {
              console.error(`Error processing page ${i}`, pageError);
-             throw new Error(`Failed to process page ${i}.`);
+             throw new Error(`Failed to process page ${i}: ${pageError.message || 'Unknown error'}`);
         } finally {
              if (page && page.cleanup) page.cleanup();
         }
