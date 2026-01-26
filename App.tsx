@@ -15,7 +15,7 @@ import UpdateNotification from './components/UpdateNotification';
 type ToolType = 'compress' | 'convert' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'numbers' | 'rotate' | 'ocr' | null;
 
 const RELEASE_NOTES = {
-  version: 'v2.9.5',
+  version: 'v2.9.6',
   notes: [
     '🔧 Fixed Smart Hybrid crash on single page docs',
     '🚀 Advanced Compression Controls',

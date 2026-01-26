@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 
 interface ComparisonSliderProps {
@@ -44,7 +45,7 @@ export const ComparisonSlider: React.FC<ComparisonSliderProps> = ({ original, co
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      onPointerLeave={onPointerUp}
+      onPointerCancel={onPointerUp}
     >
       {/* Background Layer (Original) */}
       <img 
