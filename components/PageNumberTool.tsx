@@ -2,6 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ProcessStatus, PageNumberSettings, PageNumberPosition } from '../types';
 import { addPageNumbers } from '../services/pageNumberService';
+import { renderPdfPage } from '../services/pdfSignature';
 
 // Constants
 const formatBytes = (bytes: number, decimals = 2) => {
@@ -17,6 +18,7 @@ const PageNumberTool: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<ProcessStatus>({ isProcessing: false, currentStep: '', progress: 0 });
   const [isDragging, setIsDragging] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   
   // Settings
   const [settings, setSettings] = useState<PageNumberSettings>({
@@ -40,8 +42,27 @@ const PageNumberTool: React.FC = () => {
     }
   }, [status.resultBlob]);
 
+  // Generate Preview
+  useEffect(() => {
+      if (!file) {
+          setPreviewImage(null);
+          return;
+      }
+      
+      let active = true;
+      // Render the first page
+      renderPdfPage(file, 0).then(res => {
+          if (active) setPreviewImage(URL.createObjectURL(res.blob));
+      }).catch(err => {
+          console.warn("Preview render failed", err);
+      });
+      
+      return () => { active = false; };
+  }, [file]);
+
   const resetState = () => {
     setFile(null);
+    setPreviewImage(null);
     setStatus({ isProcessing: false, currentStep: '', progress: 0, resultBlob: undefined, error: undefined });
   };
 
@@ -158,26 +179,33 @@ const PageNumberTool: React.FC = () => {
                 </div>
             ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center p-8 relative">
-                    <div className="absolute top-6 left-6 flex items-center gap-3 opacity-70">
-                        <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center">
+                    
+                    {/* File Info - Fixed visibility issues */}
+                    <div className="absolute top-4 left-4 md:top-6 md:left-6 flex items-center gap-3 z-30 pointer-events-none">
+                        <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center shadow-lg border border-white/10 backdrop-blur-sm">
                             <span className="text-xl">📄</span>
                         </div>
-                        <div>
-                            <div className="text-xs font-bold text-white max-w-[200px] truncate">{file.name}</div>
-                            <div className="text-[10px] text-slate-400 font-mono">{formatBytes(file.size)}</div>
+                        <div className="bg-black/60 backdrop-blur-md px-3 py-2 rounded-xl border border-white/10 shadow-lg">
+                            <div className="text-xs font-bold text-white max-w-[150px] md:max-w-[250px] truncate">{file.name}</div>
+                            <div className="text-[10px] text-slate-300 font-mono">{formatBytes(file.size)}</div>
                         </div>
                     </div>
 
-                    {/* VIRTUAL PAGE PREVIEW */}
-                    <div className="relative w-full max-w-[340px] aspect-[1/1.414] bg-white rounded-lg shadow-2xl transition-all duration-300 transform md:scale-100 scale-90">
-                        {/* Mock Text Lines for realism */}
-                        <div className="absolute top-8 left-8 right-8 space-y-4 opacity-10 pointer-events-none">
-                            <div className="h-4 bg-slate-900 rounded w-3/4"></div>
-                            <div className="h-2 bg-slate-900 rounded w-full"></div>
-                            <div className="h-2 bg-slate-900 rounded w-full"></div>
-                            <div className="h-2 bg-slate-900 rounded w-5/6"></div>
-                            <div className="h-32 bg-slate-900 rounded w-full mt-8"></div>
-                        </div>
+                    {/* PREVIEW CONTAINER */}
+                    <div className="relative w-full max-w-[340px] aspect-[1/1.414] bg-white rounded-lg shadow-2xl transition-all duration-300 transform md:scale-100 scale-90 overflow-hidden border border-white/10">
+                        
+                        {/* The Actual PDF Preview */}
+                        {previewImage ? (
+                            <img 
+                                src={previewImage} 
+                                alt="PDF Preview" 
+                                className="w-full h-full object-contain pointer-events-none"
+                            />
+                        ) : (
+                            <div className="absolute inset-0 flex items-center justify-center">
+                                <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                            </div>
+                        )}
 
                         {/* Interactive Click Zones */}
                         {[
@@ -212,7 +240,7 @@ const PageNumberTool: React.FC = () => {
                                     {/* The Number Stamp */}
                                     <div className={`
                                         px-3 py-1 rounded text-slate-900 font-bold transition-all duration-300
-                                        ${isSelected ? 'bg-indigo-100 text-indigo-700 ring-2 ring-indigo-500 shadow-lg' : 'bg-transparent border border-dashed border-slate-300'}
+                                        ${isSelected ? 'bg-indigo-100 text-indigo-700 ring-2 ring-indigo-500 shadow-lg' : 'bg-transparent border border-dashed border-slate-500/50'}
                                     `}
                                     style={{ fontSize: Math.max(10, settings.fontSize * 0.8) + 'px' }} // Scaled font for preview
                                     >
@@ -221,14 +249,9 @@ const PageNumberTool: React.FC = () => {
                                 </div>
                             );
                         })}
-                        
-                        {/* Instruction Label */}
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
-                            <span className="text-4xl font-black text-slate-300 -rotate-12">PREVIEW</span>
-                        </div>
                     </div>
                     
-                    <p className="mt-6 text-xs font-bold text-slate-500 uppercase tracking-widest">Click page corners to positioning</p>
+                    <p className="mt-6 text-xs font-bold text-slate-500 uppercase tracking-widest">Click page corners to position</p>
                 </div>
             )}
         </div>
