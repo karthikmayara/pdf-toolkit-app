@@ -41,7 +41,6 @@ const CompressTool: React.FC = () => {
   // Scroll to results
   useEffect(() => {
     if (status.resultBlob && resultsRef.current) {
-        // Small delay to allow render
         setTimeout(() => {
             resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 100);
@@ -68,7 +67,7 @@ const CompressTool: React.FC = () => {
             if (!active) return;
 
             const page = await pdf.getPage(1);
-            const viewport = page.getViewport({ scale: 1.0 }); // decent quality for slider
+            const viewport = page.getViewport({ scale: 1.5 }); // Higher quality for "Cover Art" look
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             if (ctx) {
@@ -110,7 +109,7 @@ const CompressTool: React.FC = () => {
             if (!active) return;
 
             const page = await pdf.getPage(1);
-            const viewport = page.getViewport({ scale: 1.0 });
+            const viewport = page.getViewport({ scale: 1.5 });
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             if (ctx) {
@@ -160,7 +159,6 @@ const CompressTool: React.FC = () => {
       setActivePreset('recommended');
       applyPreset('recommended');
     }
-    // Clear the input value so the same file can be selected again if needed
     if (e.target) e.target.value = '';
   };
 
@@ -194,7 +192,7 @@ const CompressTool: React.FC = () => {
 
     setStatus({ 
         isProcessing: true, 
-        currentStep: 'Starting engine...', 
+        currentStep: 'Initializing...', 
         progress: 0,
         originalSize: file.size 
     });
@@ -241,265 +239,225 @@ const CompressTool: React.FC = () => {
   const isSavingsNegative = savingsPercent < 0;
 
   return (
-    <div className="max-w-4xl mx-auto animate-fade-in pb-12">
-      <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-xl overflow-hidden border border-slate-100 dark:border-slate-700 transition-colors duration-300">
+    <div className="max-w-7xl mx-auto animate-fade-in pb-12 px-4 sm:px-6">
+      {/* Main Card Container - Mimicking the "Ether Real" card */}
+      <div className="bg-[#0f172a] text-white rounded-[2rem] shadow-2xl overflow-hidden min-h-[600px] flex flex-col md:flex-row relative">
         
-        {/* Header */}
-        <div className="bg-gradient-to-r from-indigo-600 to-blue-600 p-8 text-white text-center">
-          <h2 className="text-3xl font-bold mb-2">Compress PDF</h2>
-          <p className="opacity-90">Reduce file size intelligently while maintaining quality.</p>
+        {/* Close Button (Top Right) */}
+        {file && (
+            <button 
+                onClick={resetState}
+                className="absolute top-4 right-4 z-50 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center backdrop-blur-md transition-all"
+                title="Close / Reset"
+            >
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        )}
+
+        {/* LEFT COLUMN: VISUAL / THUMBNAIL */}
+        <div 
+            className={`
+                relative md:w-1/2 min-h-[300px] md:min-h-full transition-all duration-500 overflow-hidden flex items-center justify-center
+                ${!file ? 'bg-gradient-to-br from-indigo-900 to-[#0f172a]' : 'bg-black'}
+            `}
+            onDragOver={!file ? handleDragOver : undefined}
+            onDragLeave={!file ? handleDragLeave : undefined}
+            onDrop={!file ? handleDrop : undefined}
+            onClick={() => !file && fileInputRef.current?.click()}
+        >
+            {/* Background Image / Thumbnail */}
+            {thumbnailUrl ? (
+                <>
+                    <div className="absolute inset-0 bg-cover bg-center opacity-50 blur-xl scale-110" style={{ backgroundImage: `url(${thumbnailUrl})` }}></div>
+                    <img src={thumbnailUrl} alt="PDF Cover" className="relative z-10 max-h-[80%] max-w-[85%] shadow-2xl rounded-lg object-contain transform hover:scale-105 transition-transform duration-700" />
+                </>
+            ) : (
+                /* Empty State Visual */
+                <div className={`text-center p-8 cursor-pointer transition-transform duration-300 ${isDragging ? 'scale-105' : ''}`}>
+                    <div className="w-32 h-32 bg-indigo-500/20 rounded-full flex items-center justify-center mx-auto mb-6 backdrop-blur-sm border border-indigo-500/30">
+                        <svg className="w-12 h-12 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                    </div>
+                    <h3 className="text-2xl font-bold tracking-tight mb-2">Upload PDF</h3>
+                    <p className="text-indigo-200/60 text-sm font-medium uppercase tracking-widest">Drag & Drop or Click</p>
+                </div>
+            )}
+            
+            {/* Date/Info Tag (Top Left of Visual) - Aesthetic Only */}
+            {file && (
+                <div className="absolute top-6 left-6 z-20">
+                    <div className="flex items-center gap-2 text-xs font-bold tracking-widest text-indigo-300 uppercase">
+                        <span className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse"></span>
+                        {formatBytes(file.size)}
+                    </div>
+                </div>
+            )}
         </div>
 
-        <div className="p-4 sm:p-8">
-          
-          {/* 1. Upload Section */}
-          {!file && (
-            <div 
-              onClick={() => fileInputRef.current?.click()}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              className={`
-                border-4 border-dashed rounded-3xl p-12 sm:p-20 text-center cursor-pointer transition-all duration-200 group
-                ${isDragging 
-                  ? 'border-indigo-500 bg-indigo-50 dark:bg-slate-700 scale-[1.01]' 
-                  : 'border-slate-200 dark:border-slate-600 hover:border-indigo-400 dark:hover:border-indigo-500 hover:bg-slate-50 dark:hover:bg-slate-700/50'}
-              `}
-            >
-              <div className="w-24 h-24 bg-indigo-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform text-indigo-600 dark:text-indigo-400">
-                  <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
-              </div>
-              <h3 className="text-2xl font-bold text-slate-700 dark:text-slate-200 mb-2">
-                {isDragging ? 'Drop file now' : 'Select PDF File'}
-              </h3>
-              <p className="text-slate-500 dark:text-slate-400">Drag and drop or click to upload</p>
-            </div>
-          )}
+        {/* RIGHT COLUMN: CONTROLS & INFO */}
+        <div className="md:w-1/2 p-8 md:p-12 flex flex-col justify-center relative bg-[#0f172a]">
+            
+            {!status.resultBlob ? (
+                /* MODE: CONFIGURATION */
+                <div className="space-y-10 animate-fade-in">
+                    
+                    {/* Header Section */}
+                    <div>
+                        <div className="flex items-center gap-3 mb-2 text-cyan-400 font-bold text-xs tracking-[0.2em] uppercase">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+                            Smart Reduction
+                        </div>
+                        <h2 className="text-5xl md:text-6xl font-black text-white leading-[0.9] tracking-tighter">
+                            COMPRESS <br/> PDF
+                        </h2>
+                        <p className="mt-4 text-slate-400 text-sm leading-relaxed max-w-sm">
+                            {file ? file.name : "Reduce file size intelligently while preserving quality."}
+                        </p>
+                    </div>
 
-          {/* 2. Configuration & Process */}
-          {file && !status.resultBlob && (
-            <div className={`space-y-8 animate-fade-in ${status.isProcessing ? 'pointer-events-none opacity-60' : ''}`}>
-              
-              {/* File Info Bar */}
-              <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
-                <div className="w-12 h-16 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-600 flex items-center justify-center shrink-0">
-                    <span className="text-2xl">📄</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-slate-800 dark:text-slate-200 truncate">{file.name}</h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">{formatBytes(file.size)}</p>
-                </div>
-                <button 
-                    onClick={resetState}
-                    className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"
-                    title="Remove file"
-                >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
-              </div>
+                    {file && (
+                        <>
+                            {/* Controls */}
+                            <div className="space-y-6">
+                                {/* Preset Buttons */}
+                                <div className="grid grid-cols-3 gap-3">
+                                    {[
+                                        { id: 'recommended', label: 'Balanced' },
+                                        { id: 'extreme', label: 'Smallest' },
+                                        { id: 'lossless', label: 'Highest' }
+                                    ].map(preset => (
+                                        <button
+                                            key={preset.id}
+                                            onClick={() => applyPreset(preset.id as PresetType)}
+                                            className={`py-3 px-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border
+                                                ${activePreset === preset.id 
+                                                    ? 'bg-white text-[#0f172a] border-white' 
+                                                    : 'bg-transparent text-slate-500 border-slate-700 hover:border-slate-500 hover:text-slate-300'}
+                                            `}
+                                        >
+                                            {preset.label}
+                                        </button>
+                                    ))}
+                                </div>
 
-              {/* Presets Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                 {[
-                    { id: 'extreme', icon: '📉', label: 'Extreme', desc: 'Max reduction, low quality', color: 'orange' },
-                    { id: 'recommended', icon: '✨', label: 'Recommended', desc: 'Balanced size & quality', color: 'indigo' },
-                    { id: 'lossless', icon: '💎', label: 'Lossless', desc: 'Original quality, less savings', color: 'green' }
-                 ].map((preset) => (
-                     <button 
-                        key={preset.id}
-                        onClick={() => applyPreset(preset.id as PresetType)}
-                        className={`relative p-5 rounded-2xl border-2 text-left transition-all hover:scale-[1.02] active:scale-[0.98] flex flex-col h-full
-                            ${activePreset === preset.id 
-                              ? `border-${preset.color}-500 bg-${preset.color}-50 dark:bg-${preset.color}-900/20 ring-1 ring-${preset.color}-500 shadow-md` 
-                              : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-600'}`}
-                     >
-                         <div className="text-3xl mb-3">{preset.icon}</div>
-                         <h4 className={`font-bold ${activePreset === preset.id ? `text-${preset.color}-700 dark:text-${preset.color}-300` : 'text-slate-800 dark:text-white'}`}>
-                             {preset.label}
-                         </h4>
-                         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-snug">
-                            {preset.desc}
-                         </p>
-                         {activePreset === preset.id && (
-                             <div className={`absolute top-4 right-4 w-3 h-3 rounded-full bg-${preset.color}-500 shadow-sm`} />
-                         )}
-                     </button>
-                 ))}
-              </div>
+                                {/* Custom Slider Trigger */}
+                                <div>
+                                    <button 
+                                        onClick={() => setShowAdvanced(!showAdvanced)}
+                                        className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-cyan-400 transition-colors uppercase tracking-wider"
+                                    >
+                                        <span>Custom Settings</span>
+                                        <svg className={`w-3 h-3 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                                    </button>
 
-               {/* Advanced Settings */}
-               <div className="border-t border-slate-200 dark:border-slate-700 pt-6">
-                   <button 
-                     onClick={() => setShowAdvanced(!showAdvanced)}
-                     className="flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-indigo-500 transition-colors mx-auto"
-                   >
-                       {showAdvanced ? 'Hide Custom Options' : 'Show Custom Options'}
-                       <svg className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-                   </button>
-
-                   <div className={`overflow-hidden transition-all duration-300 ease-in-out ${showAdvanced ? 'max-h-96 opacity-100 mt-6' : 'max-h-0 opacity-0'}`}>
-                        <div className="bg-slate-50 dark:bg-slate-900/50 p-6 rounded-2xl space-y-6 border border-slate-200 dark:border-slate-700">
-                            
-                            <div className="flex gap-4">
-                                <label className="flex items-center gap-2 cursor-pointer p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 flex-1">
-                                    <input type="radio" checked={settings.mode === CompressionMode.STRUCTURE} onChange={() => { setSettings(s => ({...s, mode: CompressionMode.STRUCTURE})); setActivePreset('custom'); }} className="text-indigo-600 focus:ring-indigo-500" />
-                                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200">Structure Only</span>
-                                </label>
-                                <label className="flex items-center gap-2 cursor-pointer p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 flex-1">
-                                    <input type="radio" checked={settings.mode === CompressionMode.IMAGE} onChange={() => { setSettings(s => ({...s, mode: CompressionMode.IMAGE})); setActivePreset('custom'); }} className="text-indigo-600 focus:ring-indigo-500" />
-                                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200">Image Compress</span>
-                                </label>
-                            </div>
-
-                            {/* Image Specific Sliders */}
-                            {settings.mode === CompressionMode.IMAGE && (
-                                <div className="space-y-6 animate-fade-in">
-                                    <div>
-                                        <div className="flex justify-between text-xs font-bold uppercase text-slate-500 mb-2">
-                                            <span>Image Quality</span>
-                                            <span>{Math.round(settings.quality * 100)}%</span>
+                                    <div className={`overflow-hidden transition-all duration-300 ${showAdvanced ? 'max-h-64 mt-4 opacity-100' : 'max-h-0 opacity-0'}`}>
+                                        <div className="space-y-4 p-4 rounded-xl bg-white/5 border border-white/10">
+                                            <div>
+                                                <div className="flex justify-between text-[10px] uppercase font-bold text-slate-400 mb-2">
+                                                    <span>Quality</span>
+                                                    <span>{Math.round(settings.quality * 100)}%</span>
+                                                </div>
+                                                <input 
+                                                    type="range" min="10" max="100" 
+                                                    value={settings.quality * 100}
+                                                    onChange={(e) => { setSettings(s => ({ ...s, quality: Number(e.target.value) / 100 })); setActivePreset('custom'); }}
+                                                    className="w-full h-1 bg-slate-700 rounded-full appearance-none cursor-pointer accent-cyan-400 hover:accent-cyan-300"
+                                                />
+                                            </div>
+                                            <div>
+                                                <div className="flex justify-between text-[10px] uppercase font-bold text-slate-400 mb-2">
+                                                    <span>Max Res</span>
+                                                    <span>{settings.maxResolution}px</span>
+                                                </div>
+                                                <input 
+                                                    type="range" min="500" max="3000" step="100"
+                                                    value={settings.maxResolution}
+                                                    onChange={(e) => { setSettings(s => ({ ...s, maxResolution: Number(e.target.value) })); setActivePreset('custom'); }}
+                                                    className="w-full h-1 bg-slate-700 rounded-full appearance-none cursor-pointer accent-cyan-400 hover:accent-cyan-300"
+                                                />
+                                            </div>
                                         </div>
-                                        <input 
-                                            type="range" min="10" max="100" 
-                                            value={settings.quality * 100}
-                                            onChange={(e) => { setSettings(s => ({ ...s, quality: Number(e.target.value) / 100 })); setActivePreset('custom'); }}
-                                            className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                                        />
-                                    </div>
-                                    <div>
-                                        <div className="flex justify-between text-xs font-bold uppercase text-slate-500 mb-2">
-                                            <span>Max Resolution</span>
-                                            <span>{settings.maxResolution}px</span>
-                                        </div>
-                                        <input 
-                                            type="range" min="500" max="3000" step="100"
-                                            value={settings.maxResolution}
-                                            onChange={(e) => { setSettings(s => ({ ...s, maxResolution: Number(e.target.value) })); setActivePreset('custom'); }}
-                                            className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                                        />
-                                    </div>
-                                    <div className="flex flex-col sm:flex-row gap-4">
-                                        <label className="flex items-center gap-3 cursor-pointer">
-                                            <input type="checkbox" checked={settings.grayscale} onChange={(e) => { setSettings(s => ({...s, grayscale: e.target.checked})); setActivePreset('custom'); }} className="rounded text-indigo-600 focus:ring-indigo-500 w-5 h-5" />
-                                            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Convert to Grayscale</span>
-                                        </label>
                                     </div>
                                 </div>
-                            )}
-
-                            {/* Common Settings - Now available for both modes */}
-                            <div className="flex flex-col sm:flex-row gap-4 pt-2 border-t border-slate-200 dark:border-slate-700">
-                                <label className="flex items-center gap-3 cursor-pointer">
-                                    <input type="checkbox" checked={settings.preserveMetadata} onChange={(e) => { setSettings(s => ({...s, preserveMetadata: e.target.checked})); setActivePreset('custom'); }} className="rounded text-indigo-600 focus:ring-indigo-500 w-5 h-5" />
-                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Preserve Metadata</span>
-                                </label>
-                                <label className="flex items-center gap-3 cursor-pointer">
-                                    <input type="checkbox" checked={settings.flattenForms} onChange={(e) => { setSettings(s => ({...s, flattenForms: e.target.checked})); setActivePreset('custom'); }} className="rounded text-indigo-600 focus:ring-indigo-500 w-5 h-5" />
-                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Flatten Forms</span>
-                                </label>
                             </div>
+
+                            {/* Processing Status or Button */}
+                            <div className="pt-4">
+                                {status.isProcessing ? (
+                                    <div className="flex flex-col items-start gap-3">
+                                        <div className="h-1 w-full bg-slate-800 rounded-full overflow-hidden">
+                                            <div className="h-full bg-cyan-400 transition-all duration-300" style={{ width: `${status.progress}%` }}></div>
+                                        </div>
+                                        <div className="flex justify-between w-full text-xs font-mono text-cyan-400">
+                                            <span className="animate-pulse">{status.currentStep}</span>
+                                            <span>{status.progress}%</span>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex justify-between items-center">
+                                        <div className="text-xs text-slate-500 font-bold uppercase tracking-widest">
+                                            Ready to Process
+                                        </div>
+                                        <button 
+                                            onClick={handleStart}
+                                            className="group w-14 h-14 bg-white rounded-full flex items-center justify-center hover:scale-110 transition-transform shadow-[0_0_20px_rgba(255,255,255,0.3)]"
+                                        >
+                                            <svg className="w-6 h-6 text-[#0f172a] group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
+                                        </button>
+                                    </div>
+                                )}
+                                {status.error && <p className="text-red-400 text-xs mt-3 font-bold">{status.error}</p>}
+                            </div>
+                        </>
+                    )}
+                </div>
+            ) : (
+                /* MODE: RESULTS */
+                <div className="space-y-8 animate-fade-in" ref={resultsRef}>
+                    <div>
+                        <div className="flex items-center gap-3 mb-2 text-green-400 font-bold text-xs tracking-[0.2em] uppercase">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                            Success
                         </div>
-                   </div>
-               </div>
+                        <h2 className="text-4xl md:text-5xl font-black text-white leading-tight tracking-tighter">
+                            FILE <br/> READY
+                        </h2>
+                    </div>
 
-              {/* Progress Indicator (Centered & Large) */}
-              {status.isProcessing && (
-                <div className="flex flex-col items-center justify-center py-8">
-                    <div className="relative w-20 h-20 mb-4">
-                        <div className="absolute inset-0 border-4 border-indigo-100 dark:border-slate-700 rounded-full"></div>
-                        <div className="absolute inset-0 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                    </div>
-                    <h3 className="text-xl font-bold text-indigo-600 dark:text-indigo-400 animate-pulse">{status.progress}%</h3>
-                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-2">{status.currentStep}</p>
-                </div>
-              )}
-
-              {/* Error Message */}
-              {status.error && (
-                <div className="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-300 p-4 rounded-xl border border-red-200 dark:border-red-800 text-sm font-bold flex items-center gap-3">
-                  <svg className="w-6 h-6 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                  {status.error}
-                </div>
-              )}
-
-              {/* Main Action Button */}
-              {!status.isProcessing && (
-                  <button
-                    onClick={handleStart}
-                    className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white rounded-2xl font-bold text-lg shadow-lg shadow-indigo-200 dark:shadow-none transition-all active:scale-[0.98] flex items-center justify-center gap-3"
-                  >
-                    Compress PDF Now
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                  </button>
-              )}
-            </div>
-          )}
-
-          {/* 3. Results */}
-          {status.resultBlob && (
-             <div ref={resultsRef} className="animate-fade-in-up">
-                
-                {/* Result Header */}
-                <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full mb-4">
-                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-                    </div>
-                    <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Compression Complete!</h2>
-                </div>
-                
-                {/* Stats Bar */}
-                <div className="bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 sm:p-6 mb-8 flex flex-col sm:flex-row justify-between items-center gap-4 shadow-sm">
-                    <div className="text-center sm:text-left">
-                         <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Original Size</p>
-                         <p className="text-lg font-bold text-slate-500 line-through decoration-red-400">{formatBytes(status.originalSize || 0)}</p>
-                    </div>
-                    <div className="text-slate-300 dark:text-slate-600 rotate-90 sm:rotate-0">
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
-                    </div>
-                    <div className="text-center sm:text-right">
-                         <p className="text-xs font-bold text-indigo-500 uppercase tracking-wider mb-1">New Size</p>
-                         <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400">{formatBytes(status.compressedSize || status.resultBlob.size)}</p>
-                    </div>
-                    <div className={`px-4 py-2 rounded-lg font-bold text-sm ${isSavingsNegative ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'}`}>
-                        {isSavingsNegative ? 'Larger (+)' : `-${savingsPercent}% Saved`}
-                    </div>
-                </div>
-
-                {/* Comparison Slider */}
-                {compressedThumbnailUrl && thumbnailUrl && (
-                    <div className="mb-8 h-[400px]">
-                        <div className="flex justify-between items-end mb-3 px-1">
-                            <h4 className="text-sm font-bold uppercase text-slate-500 dark:text-slate-400 tracking-wider">Quality Check</h4>
-                            <span className="text-[10px] text-slate-400">Drag slider to compare</span>
+                    <div className="grid grid-cols-2 gap-8 border-y border-white/10 py-6">
+                        <div>
+                            <p className="text-[10px] font-bold uppercase text-slate-500 mb-1 tracking-wider">Before</p>
+                            <p className="text-xl font-mono text-slate-300 line-through decoration-red-500/50">{formatBytes(status.originalSize || 0)}</p>
                         </div>
-                        <ComparisonSlider original={thumbnailUrl} compressed={compressedThumbnailUrl} />
+                        <div>
+                            <p className="text-[10px] font-bold uppercase text-cyan-400 mb-1 tracking-wider">After</p>
+                            <p className="text-3xl font-mono font-bold text-white">{formatBytes(status.compressedSize || 0)}</p>
+                        </div>
                     </div>
-                )}
 
-                {/* Actions */}
-                <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  <button 
-                    onClick={handleDownload}
-                    className="flex-1 px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-indigo-200 dark:shadow-none transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                    Download PDF
-                  </button>
-                  <button 
-                    onClick={handleBackToOptions}
-                    className="flex-1 px-8 py-4 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 rounded-xl font-bold hover:bg-slate-50 dark:hover:bg-slate-600 transition-all"
-                  >
-                    Adjust Settings
-                  </button>
-                  <button 
-                    onClick={resetState}
-                    className="px-6 py-4 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 font-bold transition-colors"
-                  >
-                    Start Over
-                  </button>
+                    <div className="flex items-center justify-between bg-white/5 rounded-2xl p-4 border border-white/10">
+                        <span className={`text-sm font-bold ${isSavingsNegative ? 'text-orange-400' : 'text-green-400'}`}>
+                            {isSavingsNegative ? 'Larger (+)' : 'Reduced by'}
+                        </span>
+                        <span className="text-3xl font-black text-white">{savingsPercent}%</span>
+                    </div>
+
+                    <div className="flex gap-4 pt-4">
+                        <button 
+                            onClick={handleDownload}
+                            className="flex-1 py-4 bg-white text-[#0f172a] rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-cyan-50 transition-colors shadow-lg flex items-center justify-center gap-2"
+                        >
+                            <span>Download</span>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        </button>
+                        <button 
+                            onClick={handleBackToOptions}
+                            className="px-6 py-4 bg-transparent border border-slate-700 text-white rounded-xl font-bold uppercase tracking-widest text-xs hover:border-white transition-colors"
+                        >
+                            Tweak
+                        </button>
+                    </div>
                 </div>
-             </div>
-          )}
+            )}
         </div>
       </div>
 
