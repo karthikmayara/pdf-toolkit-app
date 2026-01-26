@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useRef } from 'react';
 import CompressTool from './components/CompressTool';
 import ImageConverterTool from './components/ImageConverterTool';
@@ -15,12 +14,12 @@ import UpdateNotification from './components/UpdateNotification';
 type ToolType = 'compress' | 'convert' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'numbers' | 'rotate' | 'ocr' | null;
 
 const RELEASE_NOTES = {
-  version: 'v2.9.1',
+  version: 'v2.9.2',
   notes: [
-    '🚀 Hybrid Compression Engine',
-    'Restored Comparison Slider',
-    'Smart Text Detection',
-    'Enhanced UI/UX'
+    '🚀 Advanced Compression Controls',
+    'New Resolution & Grayscale options',
+    'Enhanced Lossless Deduplication',
+    'Smart Hybrid Engine improvements'
   ]
 };
 

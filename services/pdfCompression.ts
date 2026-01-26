@@ -17,7 +17,7 @@ export const compressPDF = async (
   const { PDFDocument } = window.PDFLib;
   const pdfjs = window.pdfjsLib;
 
-  // 1. Mode Switch: Structure Optimization
+  // 1. Mode Switch: Structure Optimization (Lossless)
   if (settings.mode === CompressionMode.STRUCTURE) {
     onProgress(10, 'Loading file into memory...');
     let arrayBuffer;
@@ -37,18 +37,28 @@ export const compressPDF = async (
         }
         throw new Error("Failed to parse PDF. The file might be corrupted.");
     }
-    
-    if (!settings.preserveMetadata) {
-       pdfDoc.setTitle('');
-       pdfDoc.setAuthor('');
-       pdfDoc.setSubject('');
-       pdfDoc.setKeywords([]);
-       pdfDoc.setProducer('PDF Toolkit Pro');
-       pdfDoc.setCreator('PDF Toolkit Pro');
+
+    // Dead Object Removal / Garbage Collection
+    // Strategy: Create a brand new document and copy pages. 
+    // This leaves behind unreferenced objects (garbage) from the original file's stream.
+    onProgress(40, 'Re-packing document structure...');
+    const newDoc = await PDFDocument.create();
+
+    // Copy Metadata
+    if (settings.preserveMetadata) {
+       newDoc.setTitle(pdfDoc.getTitle() || '');
+       newDoc.setAuthor(pdfDoc.getAuthor() || '');
+       newDoc.setSubject(pdfDoc.getSubject() || '');
+       newDoc.setKeywords(pdfDoc.getKeywords() || []);
+       newDoc.setProducer(pdfDoc.getProducer() || '');
+       newDoc.setCreator(pdfDoc.getCreator() || '');
+    } else {
+       newDoc.setProducer('PDF Toolkit Pro');
+       newDoc.setCreator('PDF Toolkit Pro');
     }
 
     if (settings.flattenForms) {
-      onProgress(40, 'Flattening form fields...');
+      onProgress(50, 'Flattening form fields...');
       try {
         const form = pdfDoc.getForm();
         if (form.getFields().length > 0) {
@@ -59,8 +69,27 @@ export const compressPDF = async (
       }
     }
 
-    onProgress(60, 'Optimizing object streams...');
-    const compressedBytes = await pdfDoc.save({
+    onProgress(60, 'Copying pages & removing waste...');
+    const indices = pdfDoc.getPageIndices();
+    
+    // Copying pages in batches to avoid UI freeze on large docs
+    const batchSize = 50;
+    for (let i = 0; i < indices.length; i += batchSize) {
+        const batch = indices.slice(i, i + batchSize);
+        const copiedPages = await newDoc.copyPages(pdfDoc, batch);
+        copiedPages.forEach(p => newDoc.addPage(p));
+        
+        // Update progress roughly based on page copy
+        const copyProgress = 60 + Math.round((i / indices.length) * 20);
+        onProgress(copyProgress, `Optimizing page ${i+1} of ${indices.length}...`);
+        
+        // Yield to event loop
+        await new Promise(r => setTimeout(r, 0));
+    }
+
+    onProgress(85, 'Finalizing streams...');
+    // Save with Object Streams enabled for maximum structural compression
+    const compressedBytes = await newDoc.save({
       useObjectStreams: true,
       addDefaultPage: false,
       objectsPerTick: 50,
@@ -70,15 +99,15 @@ export const compressPDF = async (
     return new Blob([compressedBytes], { type: 'application/pdf' });
   }
 
-  // 2. Mode Switch: Image Re-compression (Hybrid Mode Support)
+  // 2. Mode Switch: Image Re-compression (Force Image & Hybrid)
   if (settings.mode === CompressionMode.IMAGE) {
     const fileUrl = URL.createObjectURL(file);
     let loadingTask: any = null;
 
     try {
-      onProgress(5, 'Initializing Hybrid Engine...');
+      onProgress(5, 'Initializing Compression Engine...');
       
-      // Load Source Document (for copying vector pages)
+      // Load Source Document (for copying vector pages in Hybrid mode)
       const srcArrayBuffer = await file.arrayBuffer();
       let srcPdfDoc: any;
       try {
@@ -113,45 +142,71 @@ export const compressPDF = async (
 
       if (!ctx) throw new Error('Failed to create canvas context - Device memory may be low');
 
-      const MAX_CANVAS_DIM = 3000; 
+      const MAX_CANVAS_DIM = 4000; // Increased to support higher resolution requests
 
       for (let i = 1; i <= totalPages; i++) {
         const progress = Math.round(((i - 1) / totalPages) * 100);
         
-        let isTextHeavy = false;
+        let preservePage = false;
         let page: any = null;
 
         try {
             page = await pdf.getPage(i);
             
-            // PHASE 2: Hybrid Detection
+            // PHASE 2: Smart Hybrid Detection
             if (settings.autoDetectText) {
-                const textContent = await page.getTextContent();
-                // Heuristic: If we find > 50 characters, assume it's a vector document worth preserving.
-                const textLen = textContent.items.reduce((acc: number, item: any) => acc + item.str.length, 0);
-                if (textLen > 50) {
-                    isTextHeavy = true;
+                // 1. Check for Images on the page
+                // We use getOperatorList to see if any paintImageXObject commands exist.
+                const opList = await page.getOperatorList();
+                const imageOps = opList.fn.filter((fn: number) => 
+                    fn === pdfjs.OPS.paintImageXObject || 
+                    fn === pdfjs.OPS.paintImageMaskXObject ||
+                    fn === pdfjs.OPS.paintInlineImageXObject
+                );
+                
+                const hasImages = imageOps.length > 0;
+
+                if (!hasImages) {
+                    // Page has NO images. It's text/vectors only. 
+                    // Rasterizing this would INCREASE file size. Always preserve.
+                    preservePage = true;
+                } else {
+                    // Page has images. Check if it also has significant text (Hybrid document)
+                    const textContent = await page.getTextContent();
+                    const textLen = textContent.items.reduce((acc: number, item: any) => acc + item.str.length, 0);
+                    
+                    // Threshold: If > 100 chars, assume it's a mixed document.
+                    if (textLen > 100) {
+                        preservePage = true;
+                    }
                 }
             }
 
-            if (isTextHeavy) {
-                // STRATEGY A: Preserve Vector Page
-                onProgress(progress, `Page ${i}: Text detected - Preserving quality...`);
+            if (preservePage) {
+                // STRATEGY A: Preserve Vector Page (Smart Mode)
+                onProgress(progress, `Page ${i}: Text/Vectors detected - Preserving...`);
                 const [copiedPage] = await newPdfDoc.copyPages(srcPdfDoc, [i - 1]);
                 newPdfDoc.addPage(copiedPage);
             } else {
-                // STRATEGY B: Rasterize & Compress (Scans/Images)
+                // STRATEGY B: Rasterize & Compress (Scans/Images/Force Image Mode)
                 onProgress(progress, `Page ${i}: Compressing image content...`);
                 
                 const unscaledViewport = page.getViewport({ scale: 1.0 });
                 const maxDim = Math.max(unscaledViewport.width, unscaledViewport.height);
                 
-                let scale = settings.maxResolution / maxDim;
-                scale = Math.min(scale, 4.0);
-                scale = Math.max(scale, 0.2);
+                // Adaptive Resolution Scaling
+                // If user selected 2000px, and page is 800px, we scale up (or down).
+                // If setting.maxResolution is 0 (or undefined), default to 2000.
+                const targetMaxDim = settings.maxResolution || 2000;
+                let scale = targetMaxDim / maxDim;
+                
+                // Safety clamp
+                scale = Math.min(scale, 4.0); // Don't supersample too much
+                scale = Math.max(scale, 0.5); // Don't downsample to pixelation
                 
                 let scaledViewport = page.getViewport({ scale });
 
+                // Double check hardware limits
                 if (scaledViewport.width > MAX_CANVAS_DIM || scaledViewport.height > MAX_CANVAS_DIM) {
                     const clampScale = Math.min(
                         MAX_CANVAS_DIM / scaledViewport.width,
@@ -164,6 +219,7 @@ export const compressPDF = async (
                 canvas.width = Math.floor(scaledViewport.width);
                 canvas.height = Math.floor(scaledViewport.height);
 
+                // Fill white background (handles transparent PDFs)
                 ctx.fillStyle = '#ffffff';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -172,18 +228,22 @@ export const compressPDF = async (
                     viewport: scaledViewport,
                 }).promise;
 
+                // Grayscale Conversion (Pixel Manipulation)
                 if (settings.grayscale) {
                     const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                     const data = imgData.data;
                     for (let j = 0; j < data.length; j += 4) {
+                        // Standard luminance formula
                         const avg = (data[j] * 0.299 + data[j + 1] * 0.587 + data[j + 2] * 0.114);
                         data[j] = avg; 
                         data[j + 1] = avg; 
                         data[j + 2] = avg; 
+                        // Alpha data[j+3] remains
                     }
                     ctx.putImageData(imgData, 0, 0);
                 }
 
+                // Encode to JPEG
                 const blob = await new Promise<Blob | null>((resolve) => {
                     canvas.toBlob((b) => resolve(b), 'image/jpeg', settings.quality);
                 });
@@ -193,6 +253,7 @@ export const compressPDF = async (
                 const arrayBufferImg = await blob.arrayBuffer();
                 const embeddedImage = await newPdfDoc.embedJpg(arrayBufferImg);
 
+                // Add page matching the compressed image dimensions
                 const newPage = newPdfDoc.addPage([scaledViewport.width, scaledViewport.height]);
                 newPage.drawImage(embeddedImage, {
                     x: 0,

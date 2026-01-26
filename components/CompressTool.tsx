@@ -13,7 +13,7 @@ const formatBytes = (bytes: number, decimals = 2) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
 };
 
-type PresetType = 'extreme' | 'recommended' | 'lossless' | 'custom';
+type UiMode = 'hybrid' | 'image' | 'lossless';
 
 // --- MAIN COMPONENT ---
 const CompressTool: React.FC = () => {
@@ -23,18 +23,25 @@ const CompressTool: React.FC = () => {
   
   const [status, setStatus] = useState<ProcessStatus>({ isProcessing: false, currentStep: '', progress: 0 });
   const [isDragging, setIsDragging] = useState(false);
-  const [activePreset, setActivePreset] = useState<PresetType>('recommended');
-  const [showAdvanced, setShowAdvanced] = useState(false);
   
-  const [settings, setSettings] = useState<CompressionSettings>({
-    mode: CompressionMode.IMAGE, 
-    quality: 0.8,
-    maxResolution: 2000, 
-    grayscale: false,
+  // UI State
+  const [uiMode, setUiMode] = useState<UiMode>('hybrid');
+  
+  // Settings State
+  const [quality, setQuality] = useState(0.8); // 0.1 - 1.0
+  const [resolution, setResolution] = useState(2000); // 500 - 4000
+  const [grayscale, setGrayscale] = useState(false);
+  
+  // Derived Settings for the Service
+  const settings: CompressionSettings = {
+    mode: uiMode === 'lossless' ? CompressionMode.STRUCTURE : CompressionMode.IMAGE,
+    quality: quality,
+    maxResolution: resolution,
+    grayscale: uiMode === 'image' ? grayscale : false,
     flattenForms: false,
     preserveMetadata: false,
-    autoDetectText: true // Default to Hybrid Mode
-  });
+    autoDetectText: uiMode === 'hybrid'
+  };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
@@ -137,8 +144,10 @@ const CompressTool: React.FC = () => {
     setThumbnailUrl(null);
     setCompressedThumbnailUrl(null);
     setStatus({ isProcessing: false, currentStep: '', progress: 0, resultBlob: undefined, error: undefined });
-    setActivePreset('recommended');
-    applyPreset('recommended');
+    setUiMode('hybrid');
+    setQuality(0.8);
+    setResolution(2000);
+    setGrayscale(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -157,8 +166,6 @@ const CompressTool: React.FC = () => {
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0]);
       setStatus({ isProcessing: false, currentStep: '', progress: 0 }); 
-      setActivePreset('recommended');
-      applyPreset('recommended');
     }
     if (e.target) e.target.value = '';
   };
@@ -170,24 +177,8 @@ const CompressTool: React.FC = () => {
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]?.type === 'application/pdf') {
         setFile(e.dataTransfer.files[0]);
-        setActivePreset('recommended');
-        applyPreset('recommended');
     } else {
         alert('Please upload a PDF file.');
-    }
-  };
-
-  const applyPreset = (type: PresetType) => {
-    setActivePreset(type);
-    if (type === 'extreme') {
-        // Extreme: Force Image Mode, Disable Hybrid detection, Low Quality
-        setSettings(s => ({ ...s, mode: CompressionMode.IMAGE, quality: 0.6, maxResolution: 1200, grayscale: false, autoDetectText: false }));
-    } else if (type === 'recommended') {
-        // Recommended: Hybrid Mode (Smart), Good Quality
-        setSettings(s => ({ ...s, mode: CompressionMode.IMAGE, quality: 0.8, maxResolution: 2000, grayscale: false, autoDetectText: true }));
-    } else if (type === 'lossless') {
-        // Lossless: Structure Mode only
-        setSettings(s => ({ ...s, mode: CompressionMode.STRUCTURE, quality: 1.0, maxResolution: 5000, grayscale: false, autoDetectText: true }));
     }
   };
 
@@ -244,10 +235,10 @@ const CompressTool: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto animate-fade-in pb-12 px-4 sm:px-6">
-      {/* Main Card Container - Mimicking the "Ether Real" card */}
+      {/* Main Card Container */}
       <div className="bg-[#0f172a] text-white rounded-[2rem] shadow-2xl overflow-hidden min-h-[600px] flex flex-col md:flex-row relative">
         
-        {/* Close Button (Top Right) */}
+        {/* Close Button */}
         {file && (
             <button 
                 onClick={resetState}
@@ -258,7 +249,7 @@ const CompressTool: React.FC = () => {
             </button>
         )}
 
-        {/* LEFT COLUMN: VISUAL / THUMBNAIL */}
+        {/* LEFT COLUMN: VISUAL */}
         <div 
             className={`
                 relative md:w-1/2 min-h-[300px] md:min-h-full transition-all duration-500 overflow-hidden flex items-center justify-center
@@ -269,14 +260,12 @@ const CompressTool: React.FC = () => {
             onDrop={!file ? handleDrop : undefined}
             onClick={() => !file && fileInputRef.current?.click()}
         >
-            {/* Background Image / Thumbnail */}
             {thumbnailUrl ? (
                 <>
                     <div className="absolute inset-0 bg-cover bg-center opacity-50 blur-xl scale-110" style={{ backgroundImage: `url(${thumbnailUrl})` }}></div>
                     <img src={thumbnailUrl} alt="PDF Cover" className="relative z-10 max-h-[80%] max-w-[85%] shadow-2xl rounded-lg object-contain transform hover:scale-105 transition-transform duration-700" />
                 </>
             ) : (
-                /* Empty State Visual */
                 <div className={`text-center p-8 cursor-pointer transition-transform duration-300 ${isDragging ? 'scale-105' : ''}`}>
                     <div className="w-32 h-32 bg-indigo-500/20 rounded-full flex items-center justify-center mx-auto mb-6 backdrop-blur-sm border border-indigo-500/30">
                         <svg className="w-12 h-12 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
@@ -286,7 +275,6 @@ const CompressTool: React.FC = () => {
                 </div>
             )}
             
-            {/* Date/Info Tag (Top Left of Visual) - Aesthetic Only */}
             {file && (
                 <div className="absolute top-6 left-6 z-20">
                     <div className="flex items-center gap-2 text-xs font-bold tracking-widest text-indigo-300 uppercase">
@@ -297,98 +285,129 @@ const CompressTool: React.FC = () => {
             )}
         </div>
 
-        {/* RIGHT COLUMN: CONTROLS & INFO */}
+        {/* RIGHT COLUMN: CONTROLS */}
         <div className="md:w-1/2 p-8 md:p-12 flex flex-col justify-center relative bg-[#0f172a]">
             
             {!status.resultBlob ? (
-                /* MODE: CONFIGURATION */
-                <div className="space-y-10 animate-fade-in">
+                <div className="space-y-8 animate-fade-in">
                     
-                    {/* Header Section */}
+                    {/* Header */}
                     <div>
                         <div className="flex items-center gap-3 mb-2 text-cyan-400 font-bold text-xs tracking-[0.2em] uppercase">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
-                            Hybrid Smart Engine
+                            {uiMode === 'hybrid' ? 'Smart Hybrid Engine' : (uiMode === 'lossless' ? 'Structure Engine' : 'Image Engine')}
                         </div>
                         <h2 className="text-5xl md:text-6xl font-black text-white leading-[0.9] tracking-tighter">
                             COMPRESS <br/> PDF
                         </h2>
-                        <p className="mt-4 text-slate-400 text-sm leading-relaxed max-w-sm">
-                            {file ? file.name : "Automatically detects text to keep vectors sharp, or compresses scanned images."}
-                        </p>
                     </div>
 
                     {file && (
                         <>
                             {/* Controls */}
                             <div className="space-y-6">
-                                {/* Preset Buttons */}
-                                <div className="grid grid-cols-3 gap-3">
-                                    {[
-                                        { id: 'recommended', label: 'Smart Hybrid' },
-                                        { id: 'extreme', label: 'Force Image' },
-                                        { id: 'lossless', label: 'Lossless' }
-                                    ].map(preset => (
-                                        <button
-                                            key={preset.id}
-                                            onClick={() => applyPreset(preset.id as PresetType)}
-                                            className={`py-3 px-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border
-                                                ${activePreset === preset.id 
-                                                    ? 'bg-white text-[#0f172a] border-white' 
-                                                    : 'bg-transparent text-slate-500 border-slate-700 hover:border-slate-500 hover:text-slate-300'}
-                                            `}
-                                        >
-                                            {preset.label}
-                                        </button>
-                                    ))}
-                                </div>
-                                <p className="text-[10px] text-slate-500 text-center">
-                                    {activePreset === 'recommended' && "Detects text & vectors to keep them sharp."}
-                                    {activePreset === 'extreme' && "Converts everything to image for max reduction."}
-                                    {activePreset === 'lossless' && "Removes invisible data only. No quality loss."}
-                                </p>
-
-                                {/* Custom Slider Trigger */}
+                                {/* Mode Selection */}
                                 <div>
-                                    <button 
-                                        onClick={() => setShowAdvanced(!showAdvanced)}
-                                        className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-cyan-400 transition-colors uppercase tracking-wider"
-                                    >
-                                        <span>Custom Settings</span>
-                                        <svg className={`w-3 h-3 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-                                    </button>
+                                    <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-2 block">Compression Strategy</label>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {[
+                                            { id: 'hybrid', label: 'Smart Hybrid', icon: '🧠' },
+                                            { id: 'image', label: 'Force Image', icon: '🖼️' },
+                                            { id: 'lossless', label: 'Lossless', icon: '⚡' }
+                                        ].map(m => (
+                                            <button
+                                                key={m.id}
+                                                onClick={() => setUiMode(m.id as UiMode)}
+                                                className={`py-3 px-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border flex flex-col items-center gap-1
+                                                    ${uiMode === m.id 
+                                                        ? 'bg-white text-[#0f172a] border-white shadow-[0_0_15px_rgba(255,255,255,0.2)]' 
+                                                        : 'bg-transparent text-slate-500 border-slate-700 hover:border-slate-500 hover:text-slate-300'}
+                                                `}
+                                            >
+                                                <span className="text-sm">{m.icon}</span>
+                                                {m.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <p className="text-[10px] text-slate-500 mt-2 text-center h-4">
+                                        {uiMode === 'hybrid' && "Detects text vs images. Best for most files."}
+                                        {uiMode === 'image' && "Converts everything to images. Max reduction."}
+                                        {uiMode === 'lossless' && "Removes invisible data only. No visual change."}
+                                    </p>
+                                </div>
 
-                                    <div className={`overflow-hidden transition-all duration-300 ${showAdvanced ? 'max-h-64 mt-4 opacity-100' : 'max-h-0 opacity-0'}`}>
-                                        <div className="space-y-4 p-4 rounded-xl bg-white/5 border border-white/10">
-                                            <div>
-                                                <div className="flex justify-between text-[10px] uppercase font-bold text-slate-400 mb-2">
-                                                    <span>Quality</span>
-                                                    <span>{Math.round(settings.quality * 100)}%</span>
-                                                </div>
-                                                <input 
-                                                    type="range" min="10" max="100" 
-                                                    value={settings.quality * 100}
-                                                    onChange={(e) => { setSettings(s => ({ ...s, quality: Number(e.target.value) / 100 })); setActivePreset('custom'); }}
-                                                    className="w-full h-1 bg-slate-700 rounded-full appearance-none cursor-pointer accent-cyan-400 hover:accent-cyan-300"
-                                                />
+                                {/* Dynamic Controls based on Mode */}
+                                {uiMode === 'lossless' && (
+                                     <div className="bg-white/5 rounded-xl p-4 border border-white/10 text-center animate-fade-in">
+                                         <p className="text-xs text-slate-400 leading-relaxed">
+                                             <strong className="text-white block mb-1">Structure Optimization Only</strong>
+                                             Performs dead object removal and stream re-packing. 
+                                             Visual quality is 100% preserved.
+                                         </p>
+                                     </div>
+                                )}
+
+                                {(uiMode === 'hybrid' || uiMode === 'image') && (
+                                    <div className="animate-fade-in space-y-4">
+                                        {/* Quality Slider */}
+                                        <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+                                            <div className="flex justify-between text-[10px] uppercase font-bold text-slate-400 mb-2">
+                                                <span>Image Quality</span>
+                                                <span className="text-white">{Math.round(quality * 100)}%</span>
                                             </div>
-                                            
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-[10px] uppercase font-bold text-slate-400">Hybrid Detection</span>
-                                                <div 
-                                                    onClick={() => { setSettings(s => ({...s, autoDetectText: !s.autoDetectText})); setActivePreset('custom'); }}
-                                                    className={`w-10 h-5 rounded-full flex items-center p-1 cursor-pointer transition-colors ${settings.autoDetectText ? 'bg-cyan-500' : 'bg-slate-700'}`}
-                                                >
-                                                    <div className={`w-3 h-3 bg-white rounded-full shadow-md transform transition-transform ${settings.autoDetectText ? 'translate-x-5' : 'translate-x-0'}`}></div>
-                                                </div>
+                                            <input 
+                                                type="range" min="10" max="100" 
+                                                value={quality * 100}
+                                                onChange={(e) => setQuality(Number(e.target.value) / 100)}
+                                                className="w-full h-1 bg-slate-700 rounded-full appearance-none cursor-pointer accent-cyan-400 hover:accent-cyan-300"
+                                            />
+                                            <div className="flex justify-between text-[10px] text-slate-600 mt-1 font-bold uppercase">
+                                                <span>Smaller Size</span>
+                                                <span>Better Look</span>
                                             </div>
                                         </div>
+
+                                        {/* Force Image Specific Controls */}
+                                        {uiMode === 'image' && (
+                                            <div className="grid grid-cols-2 gap-4 animate-fade-in">
+                                                {/* Resolution Slider */}
+                                                <div className="bg-white/5 rounded-xl p-4 border border-white/10 col-span-2 sm:col-span-1">
+                                                    <div className="flex justify-between text-[10px] uppercase font-bold text-slate-400 mb-2">
+                                                        <span>Max Resolution</span>
+                                                        <span className="text-white">{resolution}px</span>
+                                                    </div>
+                                                    <input 
+                                                        type="range" min="500" max="4000" step="100"
+                                                        value={resolution}
+                                                        onChange={(e) => setResolution(Number(e.target.value))}
+                                                        className="w-full h-1 bg-slate-700 rounded-full appearance-none cursor-pointer accent-cyan-400 hover:accent-cyan-300"
+                                                    />
+                                                </div>
+
+                                                {/* Grayscale Toggle */}
+                                                <div className="bg-white/5 rounded-xl p-4 border border-white/10 col-span-2 sm:col-span-1 flex items-center justify-between">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[10px] uppercase font-bold text-slate-400">Grayscale</span>
+                                                        <span className="text-[9px] text-slate-600">Max savings</span>
+                                                    </div>
+                                                    <label className="relative inline-flex items-center cursor-pointer">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={grayscale} 
+                                                            onChange={(e) => setGrayscale(e.target.checked)} 
+                                                            className="sr-only peer" 
+                                                        />
+                                                        <div className="w-10 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-cyan-500"></div>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                </div>
+                                )}
                             </div>
 
-                            {/* Processing Status or Button */}
-                            <div className="pt-4">
+                            {/* Processing Status */}
+                            <div className="pt-2">
                                 {status.isProcessing ? (
                                     <div className="flex flex-col items-start gap-3">
                                         <div className="h-1 w-full bg-slate-800 rounded-full overflow-hidden">
@@ -402,7 +421,7 @@ const CompressTool: React.FC = () => {
                                 ) : (
                                     <div className="flex justify-between items-center">
                                         <div className="text-xs text-slate-500 font-bold uppercase tracking-widest">
-                                            Ready to Process
+                                            {uiMode === 'hybrid' ? 'Ready (Smart Mode)' : (uiMode === 'lossless' ? 'Ready (Lossless)' : 'Ready (Force Image)')}
                                         </div>
                                         <button 
                                             onClick={handleStart}
@@ -418,7 +437,7 @@ const CompressTool: React.FC = () => {
                     )}
                 </div>
             ) : (
-                /* MODE: RESULTS */
+                /* RESULTS VIEW */
                 <div className="space-y-6 animate-fade-in flex flex-col h-full" ref={resultsRef}>
                     <div className="shrink-0">
                         <div className="flex items-center gap-3 mb-2 text-green-400 font-bold text-xs tracking-[0.2em] uppercase">
@@ -430,7 +449,6 @@ const CompressTool: React.FC = () => {
                         </h2>
                     </div>
 
-                    {/* SLIDER AREA - Added Back */}
                     <div className="flex-1 bg-black/40 rounded-xl overflow-hidden relative border border-white/10 min-h-[160px]">
                         {thumbnailUrl && compressedThumbnailUrl ? (
                             <ComparisonSlider original={thumbnailUrl} compressed={compressedThumbnailUrl} />
