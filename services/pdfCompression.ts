@@ -1,4 +1,3 @@
-
 import { CompressionMode, CompressionSettings } from '../types';
 
 /**
@@ -71,13 +70,24 @@ export const compressPDF = async (
     return new Blob([compressedBytes], { type: 'application/pdf' });
   }
 
-  // 2. Mode Switch: Image Re-compression (The Heavy Lifter)
+  // 2. Mode Switch: Image Re-compression (Hybrid Mode Support)
   if (settings.mode === CompressionMode.IMAGE) {
     const fileUrl = URL.createObjectURL(file);
     let loadingTask: any = null;
 
     try {
-      onProgress(5, 'Initializing PDF engine...');
+      onProgress(5, 'Initializing Hybrid Engine...');
+      
+      // Load Source Document (for copying vector pages)
+      const srcArrayBuffer = await file.arrayBuffer();
+      let srcPdfDoc: any;
+      try {
+        srcPdfDoc = await PDFDocument.load(srcArrayBuffer, { ignoreEncryption: true });
+      } catch(e) {
+        throw new Error("Failed to load source PDF structure.");
+      }
+
+      // Load PDF.js (for rendering/analyzing)
       loadingTask = pdfjs.getDocument(fileUrl);
       const pdf = await loadingTask.promise;
       const totalPages = pdf.numPages;
@@ -91,7 +101,6 @@ export const compressPDF = async (
           if (info) {
             if (info.Title) newPdfDoc.setTitle(info.Title);
             if (info.Author) newPdfDoc.setAuthor(info.Author);
-            // Copy other fields if needed
           }
         } catch (e) {}
       } else {
@@ -104,91 +113,107 @@ export const compressPDF = async (
 
       if (!ctx) throw new Error('Failed to create canvas context - Device memory may be low');
 
-      // CRASH PREVENTION: Max canvas dimension
-      // Increased to 3000px to allow higher quality while preventing OOM on mobile
       const MAX_CANVAS_DIM = 3000; 
 
       for (let i = 1; i <= totalPages; i++) {
         const progress = Math.round(((i - 1) / totalPages) * 100);
-        onProgress(progress, `Compressing page ${i} of ${totalPages}...`);
-
+        
+        let isTextHeavy = false;
         let page: any = null;
+
         try {
             page = await pdf.getPage(i);
-            const unscaledViewport = page.getViewport({ scale: 1.0 });
-            const maxDim = Math.max(unscaledViewport.width, unscaledViewport.height);
             
-            // Calculate scale based on settings
-            let scale = settings.maxResolution / maxDim;
-            scale = Math.min(scale, 4.0); // Don't upscale too much
-            scale = Math.max(scale, 0.2); // Don't downscale to pixel mush
-            
-            let scaledViewport = page.getViewport({ scale });
-
-            // SAFETY CHECK: If dimensions exceed browser limits, clamp them down
-            // This prevents the "Total Canvas Memory" crash
-            if (scaledViewport.width > MAX_CANVAS_DIM || scaledViewport.height > MAX_CANVAS_DIM) {
-                const clampScale = Math.min(
-                    MAX_CANVAS_DIM / scaledViewport.width,
-                    MAX_CANVAS_DIM / scaledViewport.height
-                );
-                scale = scale * clampScale;
-                scaledViewport = page.getViewport({ scale });
-            }
-
-            canvas.width = Math.floor(scaledViewport.width);
-            canvas.height = Math.floor(scaledViewport.height);
-
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            await page.render({
-                canvasContext: ctx,
-                viewport: scaledViewport,
-            }).promise;
-
-            if (settings.grayscale) {
-                const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const data = imgData.data;
-                for (let j = 0; j < data.length; j += 4) {
-                    const avg = (data[j] * 0.299 + data[j + 1] * 0.587 + data[j + 2] * 0.114);
-                    data[j] = avg; 
-                    data[j + 1] = avg; 
-                    data[j + 2] = avg; 
+            // PHASE 2: Hybrid Detection
+            if (settings.autoDetectText) {
+                const textContent = await page.getTextContent();
+                // Heuristic: If we find > 50 characters, assume it's a vector document worth preserving.
+                const textLen = textContent.items.reduce((acc: number, item: any) => acc + item.str.length, 0);
+                if (textLen > 50) {
+                    isTextHeavy = true;
                 }
-                ctx.putImageData(imgData, 0, 0);
             }
 
-            const blob = await new Promise<Blob | null>((resolve) => {
-                canvas.toBlob((b) => resolve(b), 'image/jpeg', settings.quality);
-            });
+            if (isTextHeavy) {
+                // STRATEGY A: Preserve Vector Page
+                onProgress(progress, `Page ${i}: Text detected - Preserving quality...`);
+                const [copiedPage] = await newPdfDoc.copyPages(srcPdfDoc, [i - 1]);
+                newPdfDoc.addPage(copiedPage);
+            } else {
+                // STRATEGY B: Rasterize & Compress (Scans/Images)
+                onProgress(progress, `Page ${i}: Compressing image content...`);
+                
+                const unscaledViewport = page.getViewport({ scale: 1.0 });
+                const maxDim = Math.max(unscaledViewport.width, unscaledViewport.height);
+                
+                let scale = settings.maxResolution / maxDim;
+                scale = Math.min(scale, 4.0);
+                scale = Math.max(scale, 0.2);
+                
+                let scaledViewport = page.getViewport({ scale });
 
-            if (!blob) throw new Error(`Failed to encode page ${i}`);
+                if (scaledViewport.width > MAX_CANVAS_DIM || scaledViewport.height > MAX_CANVAS_DIM) {
+                    const clampScale = Math.min(
+                        MAX_CANVAS_DIM / scaledViewport.width,
+                        MAX_CANVAS_DIM / scaledViewport.height
+                    );
+                    scale = scale * clampScale;
+                    scaledViewport = page.getViewport({ scale });
+                }
 
-            const arrayBufferImg = await blob.arrayBuffer();
-            const embeddedImage = await newPdfDoc.embedJpg(arrayBufferImg);
+                canvas.width = Math.floor(scaledViewport.width);
+                canvas.height = Math.floor(scaledViewport.height);
 
-            const newPage = newPdfDoc.addPage([scaledViewport.width, scaledViewport.height]);
-            newPage.drawImage(embeddedImage, {
-                x: 0,
-                y: 0,
-                width: scaledViewport.width,
-                height: scaledViewport.height,
-            });
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                await page.render({
+                    canvasContext: ctx,
+                    viewport: scaledViewport,
+                }).promise;
+
+                if (settings.grayscale) {
+                    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const data = imgData.data;
+                    for (let j = 0; j < data.length; j += 4) {
+                        const avg = (data[j] * 0.299 + data[j + 1] * 0.587 + data[j + 2] * 0.114);
+                        data[j] = avg; 
+                        data[j + 1] = avg; 
+                        data[j + 2] = avg; 
+                    }
+                    ctx.putImageData(imgData, 0, 0);
+                }
+
+                const blob = await new Promise<Blob | null>((resolve) => {
+                    canvas.toBlob((b) => resolve(b), 'image/jpeg', settings.quality);
+                });
+
+                if (!blob) throw new Error(`Failed to encode page ${i}`);
+
+                const arrayBufferImg = await blob.arrayBuffer();
+                const embeddedImage = await newPdfDoc.embedJpg(arrayBufferImg);
+
+                const newPage = newPdfDoc.addPage([scaledViewport.width, scaledViewport.height]);
+                newPage.drawImage(embeddedImage, {
+                    x: 0,
+                    y: 0,
+                    width: scaledViewport.width,
+                    height: scaledViewport.height,
+                });
+                
+                // Cleanup canvas
+                ctx.clearRect(0,0, canvas.width, canvas.height);
+                canvas.width = 1; canvas.height = 1;
+            }
 
         } catch (pageError) {
              console.error(`Error processing page ${i}`, pageError);
-             throw new Error(`Failed to compress page ${i}. Try lowering the resolution or quality.`);
+             throw new Error(`Failed to process page ${i}.`);
         } finally {
              if (page && page.cleanup) page.cleanup();
-             
-             // Aggressive memory cleanup for the canvas
-             ctx.clearRect(0,0, canvas.width, canvas.height);
-             canvas.width = 1; 
-             canvas.height = 1;
         }
 
-        // Pause execution briefly to let UI update and GC run
+        // Pause for GC/UI
         if (i % 3 === 0) await new Promise(r => setTimeout(r, 10));
       }
 

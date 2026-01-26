@@ -15,12 +15,12 @@ import UpdateNotification from './components/UpdateNotification';
 type ToolType = 'compress' | 'convert' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'numbers' | 'rotate' | 'ocr' | null;
 
 const RELEASE_NOTES = {
-  version: 'v2.9.0',
+  version: 'v2.9.1',
   notes: [
-    'image compression improvements',
-    'New "Supreme" Sign Tool with Asset Library',
-    'Added visual Quality Check sliders',
-    'Enhanced offline reliability & memory safety'
+    '🚀 Hybrid Compression Engine',
+    'Restored Comparison Slider',
+    'Smart Text Detection',
+    'Enhanced UI/UX'
   ]
 };
 

@@ -20,6 +20,7 @@ export interface CompressionSettings {
   grayscale: boolean;
   flattenForms: boolean; // Option to flatten interactive forms
   preserveMetadata: boolean; // Option to keep title, author, etc.
+  autoDetectText?: boolean; // Phase 2: Hybrid Compression (Skip rasterization for text pages)
 }
 
 export interface ProcessStatus {

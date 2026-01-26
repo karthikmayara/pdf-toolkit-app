@@ -33,6 +33,7 @@ const CompressTool: React.FC = () => {
     grayscale: false,
     flattenForms: false,
     preserveMetadata: false,
+    autoDetectText: true // Default to Hybrid Mode
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -179,11 +180,14 @@ const CompressTool: React.FC = () => {
   const applyPreset = (type: PresetType) => {
     setActivePreset(type);
     if (type === 'extreme') {
-        setSettings(s => ({ ...s, mode: CompressionMode.IMAGE, quality: 0.6, maxResolution: 1200, grayscale: false }));
+        // Extreme: Force Image Mode, Disable Hybrid detection, Low Quality
+        setSettings(s => ({ ...s, mode: CompressionMode.IMAGE, quality: 0.6, maxResolution: 1200, grayscale: false, autoDetectText: false }));
     } else if (type === 'recommended') {
-        setSettings(s => ({ ...s, mode: CompressionMode.IMAGE, quality: 0.8, maxResolution: 2000, grayscale: false }));
+        // Recommended: Hybrid Mode (Smart), Good Quality
+        setSettings(s => ({ ...s, mode: CompressionMode.IMAGE, quality: 0.8, maxResolution: 2000, grayscale: false, autoDetectText: true }));
     } else if (type === 'lossless') {
-        setSettings(s => ({ ...s, mode: CompressionMode.STRUCTURE, quality: 1.0, maxResolution: 5000, grayscale: false }));
+        // Lossless: Structure Mode only
+        setSettings(s => ({ ...s, mode: CompressionMode.STRUCTURE, quality: 1.0, maxResolution: 5000, grayscale: false, autoDetectText: true }));
     }
   };
 
@@ -304,13 +308,13 @@ const CompressTool: React.FC = () => {
                     <div>
                         <div className="flex items-center gap-3 mb-2 text-cyan-400 font-bold text-xs tracking-[0.2em] uppercase">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
-                            Smart Reduction
+                            Hybrid Smart Engine
                         </div>
                         <h2 className="text-5xl md:text-6xl font-black text-white leading-[0.9] tracking-tighter">
                             COMPRESS <br/> PDF
                         </h2>
                         <p className="mt-4 text-slate-400 text-sm leading-relaxed max-w-sm">
-                            {file ? file.name : "Reduce file size intelligently while preserving quality."}
+                            {file ? file.name : "Automatically detects text to keep vectors sharp, or compresses scanned images."}
                         </p>
                     </div>
 
@@ -321,9 +325,9 @@ const CompressTool: React.FC = () => {
                                 {/* Preset Buttons */}
                                 <div className="grid grid-cols-3 gap-3">
                                     {[
-                                        { id: 'recommended', label: 'Balanced' },
-                                        { id: 'extreme', label: 'Smallest' },
-                                        { id: 'lossless', label: 'Highest' }
+                                        { id: 'recommended', label: 'Smart Hybrid' },
+                                        { id: 'extreme', label: 'Force Image' },
+                                        { id: 'lossless', label: 'Lossless' }
                                     ].map(preset => (
                                         <button
                                             key={preset.id}
@@ -338,6 +342,11 @@ const CompressTool: React.FC = () => {
                                         </button>
                                     ))}
                                 </div>
+                                <p className="text-[10px] text-slate-500 text-center">
+                                    {activePreset === 'recommended' && "Detects text & vectors to keep them sharp."}
+                                    {activePreset === 'extreme' && "Converts everything to image for max reduction."}
+                                    {activePreset === 'lossless' && "Removes invisible data only. No quality loss."}
+                                </p>
 
                                 {/* Custom Slider Trigger */}
                                 <div>
@@ -363,17 +372,15 @@ const CompressTool: React.FC = () => {
                                                     className="w-full h-1 bg-slate-700 rounded-full appearance-none cursor-pointer accent-cyan-400 hover:accent-cyan-300"
                                                 />
                                             </div>
-                                            <div>
-                                                <div className="flex justify-between text-[10px] uppercase font-bold text-slate-400 mb-2">
-                                                    <span>Max Res</span>
-                                                    <span>{settings.maxResolution}px</span>
+                                            
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-[10px] uppercase font-bold text-slate-400">Hybrid Detection</span>
+                                                <div 
+                                                    onClick={() => { setSettings(s => ({...s, autoDetectText: !s.autoDetectText})); setActivePreset('custom'); }}
+                                                    className={`w-10 h-5 rounded-full flex items-center p-1 cursor-pointer transition-colors ${settings.autoDetectText ? 'bg-cyan-500' : 'bg-slate-700'}`}
+                                                >
+                                                    <div className={`w-3 h-3 bg-white rounded-full shadow-md transform transition-transform ${settings.autoDetectText ? 'translate-x-5' : 'translate-x-0'}`}></div>
                                                 </div>
-                                                <input 
-                                                    type="range" min="500" max="3000" step="100"
-                                                    value={settings.maxResolution}
-                                                    onChange={(e) => { setSettings(s => ({ ...s, maxResolution: Number(e.target.value) })); setActivePreset('custom'); }}
-                                                    className="w-full h-1 bg-slate-700 rounded-full appearance-none cursor-pointer accent-cyan-400 hover:accent-cyan-300"
-                                                />
                                             </div>
                                         </div>
                                     </div>
@@ -412,36 +419,50 @@ const CompressTool: React.FC = () => {
                 </div>
             ) : (
                 /* MODE: RESULTS */
-                <div className="space-y-8 animate-fade-in" ref={resultsRef}>
-                    <div>
+                <div className="space-y-6 animate-fade-in flex flex-col h-full" ref={resultsRef}>
+                    <div className="shrink-0">
                         <div className="flex items-center gap-3 mb-2 text-green-400 font-bold text-xs tracking-[0.2em] uppercase">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
                             Success
                         </div>
-                        <h2 className="text-4xl md:text-5xl font-black text-white leading-tight tracking-tighter">
-                            FILE <br/> READY
+                        <h2 className="text-4xl font-black text-white leading-tight tracking-tighter">
+                            FILE READY
                         </h2>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-8 border-y border-white/10 py-6">
+                    {/* SLIDER AREA - Added Back */}
+                    <div className="flex-1 bg-black/40 rounded-xl overflow-hidden relative border border-white/10 min-h-[160px]">
+                        {thumbnailUrl && compressedThumbnailUrl ? (
+                            <ComparisonSlider original={thumbnailUrl} compressed={compressedThumbnailUrl} />
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                                <span className="text-slate-500 text-xs uppercase font-bold tracking-widest">Generating Preview...</span>
+                            </div>
+                        )}
+                         <div className="absolute bottom-2 left-0 right-0 text-center pointer-events-none">
+                            <span className="text-[10px] text-white/50 uppercase font-bold tracking-widest bg-black/50 px-2 py-1 rounded">Drag slider to compare</span>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-8 border-y border-white/10 py-4 shrink-0">
                         <div>
                             <p className="text-[10px] font-bold uppercase text-slate-500 mb-1 tracking-wider">Before</p>
-                            <p className="text-xl font-mono text-slate-300 line-through decoration-red-500/50">{formatBytes(status.originalSize || 0)}</p>
+                            <p className="text-lg font-mono text-slate-300 line-through decoration-red-500/50">{formatBytes(status.originalSize || 0)}</p>
                         </div>
                         <div>
                             <p className="text-[10px] font-bold uppercase text-cyan-400 mb-1 tracking-wider">After</p>
-                            <p className="text-3xl font-mono font-bold text-white">{formatBytes(status.compressedSize || 0)}</p>
+                            <p className="text-2xl font-mono font-bold text-white">{formatBytes(status.compressedSize || 0)}</p>
                         </div>
                     </div>
 
-                    <div className="flex items-center justify-between bg-white/5 rounded-2xl p-4 border border-white/10">
+                    <div className="flex items-center justify-between bg-white/5 rounded-2xl p-4 border border-white/10 shrink-0">
                         <span className={`text-sm font-bold ${isSavingsNegative ? 'text-orange-400' : 'text-green-400'}`}>
                             {isSavingsNegative ? 'Larger (+)' : 'Reduced by'}
                         </span>
-                        <span className="text-3xl font-black text-white">{savingsPercent}%</span>
+                        <span className="text-2xl font-black text-white">{savingsPercent}%</span>
                     </div>
 
-                    <div className="flex gap-4 pt-4">
+                    <div className="flex gap-4 pt-2 shrink-0">
                         <button 
                             onClick={handleDownload}
                             className="flex-1 py-4 bg-white text-[#0f172a] rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-cyan-50 transition-colors shadow-lg flex items-center justify-center gap-2"
