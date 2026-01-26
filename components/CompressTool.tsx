@@ -247,7 +247,7 @@ const CompressTool: React.FC = () => {
       <div className="bg-[#0f172a] text-white rounded-[2rem] shadow-2xl overflow-hidden min-h-[600px] flex flex-col md:flex-row relative">
         
         {/* Close Button */}
-        {file && (
+        {file && !status.isProcessing && (
             <button 
                 onClick={resetState}
                 className="absolute top-4 right-4 z-50 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center backdrop-blur-md transition-all"
@@ -297,7 +297,7 @@ const CompressTool: React.FC = () => {
         <div className="md:w-1/2 p-8 md:p-12 flex flex-col justify-center relative bg-[#0f172a]">
             
             {!status.resultBlob ? (
-                <div className="space-y-8 animate-fade-in">
+                <div className={`space-y-8 animate-fade-in ${status.isProcessing ? 'opacity-70' : ''}`}>
                     
                     {/* Header */}
                     <div>
@@ -313,7 +313,7 @@ const CompressTool: React.FC = () => {
                     {file && (
                         <>
                             {/* Controls */}
-                            <div className="space-y-6">
+                            <div className={`space-y-6 ${status.isProcessing ? 'pointer-events-none grayscale-[0.5]' : ''}`}>
                                 {/* Mode Selection */}
                                 <div>
                                     <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-2 block">Compression Strategy</label>
@@ -325,6 +325,7 @@ const CompressTool: React.FC = () => {
                                         ].map(m => (
                                             <button
                                                 key={m.id}
+                                                disabled={status.isProcessing}
                                                 onClick={() => setUiMode(m.id as UiMode)}
                                                 className={`py-3 px-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border flex flex-col items-center gap-1
                                                     ${uiMode === m.id 
@@ -349,7 +350,7 @@ const CompressTool: React.FC = () => {
                                      <div className="bg-white/5 rounded-xl p-4 border border-white/10 text-center animate-fade-in">
                                          <p className="text-xs text-slate-400 leading-relaxed">
                                              <strong className="text-white block mb-1">Structure Optimization Only</strong>
-                                             Performs dead object removal and stream re-packing. 
+                                             Performs dead object removal, asset deduplication, and stream re-packing. 
                                              Visual quality is 100% preserved.
                                          </p>
                                      </div>
@@ -366,8 +367,9 @@ const CompressTool: React.FC = () => {
                                             <input 
                                                 type="range" min="10" max="100" 
                                                 value={quality * 100}
+                                                disabled={status.isProcessing}
                                                 onChange={(e) => setQuality(Number(e.target.value) / 100)}
-                                                className="w-full h-1 bg-slate-700 rounded-full appearance-none cursor-pointer accent-cyan-400 hover:accent-cyan-300"
+                                                className="w-full h-1 bg-slate-700 rounded-full appearance-none cursor-pointer accent-cyan-400 hover:accent-cyan-300 disabled:cursor-not-allowed"
                                             />
                                             <div className="flex justify-between text-[10px] text-slate-600 mt-1 font-bold uppercase">
                                                 <span>Smaller Size</span>
@@ -388,8 +390,9 @@ const CompressTool: React.FC = () => {
                                                     <input 
                                                         type="range" min="500" max="4000" step="100"
                                                         value={resolution}
+                                                        disabled={status.isProcessing}
                                                         onChange={(e) => setResolution(Number(e.target.value))}
-                                                        className="w-full h-1 bg-slate-700 rounded-full appearance-none cursor-pointer accent-cyan-400 hover:accent-cyan-300"
+                                                        className="w-full h-1 bg-slate-700 rounded-full appearance-none cursor-pointer accent-cyan-400 hover:accent-cyan-300 disabled:cursor-not-allowed"
                                                     />
                                                 </div>
 
@@ -403,6 +406,7 @@ const CompressTool: React.FC = () => {
                                                         <input 
                                                             type="checkbox" 
                                                             checked={grayscale} 
+                                                            disabled={status.isProcessing}
                                                             onChange={(e) => setGrayscale(e.target.checked)} 
                                                             className="sr-only peer" 
                                                         />
@@ -423,6 +427,7 @@ const CompressTool: React.FC = () => {
                                                         <input 
                                                             type="checkbox" 
                                                             checked={cleanBackground} 
+                                                            disabled={status.isProcessing}
                                                             onChange={(e) => setCleanBackground(e.target.checked)} 
                                                             className="sr-only peer" 
                                                         />
@@ -440,6 +445,7 @@ const CompressTool: React.FC = () => {
                                                         <input 
                                                             type="checkbox" 
                                                             checked={enableOCR} 
+                                                            disabled={status.isProcessing}
                                                             onChange={(e) => setEnableOCR(e.target.checked)} 
                                                             className="sr-only peer" 
                                                         />

@@ -2,6 +2,94 @@ import { CompressionMode, CompressionSettings } from '../types';
 import { extractTextPositions } from './ocrService';
 
 /**
+ * Helper: Deduplicate Assets (The "Logo Fix")
+ * Scans the document for identical XObjects (images) and makes them point to a single reference.
+ */
+const deduplicateAssets = async (pdfDoc: any, onProgress: (p: number, s: string) => void) => {
+    const { PDFName, PDFDict, PDFStream, PDFRawStream } = window.PDFLib;
+    
+    // Map of "Signature" -> First PDFRef found
+    const uniqueAssets = new Map<string, any>(); 
+    let duplicatesFound = 0;
+
+    const pages = pdfDoc.getPages();
+    const totalSteps = pages.length;
+
+    for (let i = 0; i < pages.length; i++) {
+        const page = pages[i];
+        
+        // 1. Get Resources Dictionary
+        // We use 'node' to access the low-level PDF object
+        const resources = page.node.Resources();
+        if (!resources || !(resources instanceof PDFDict)) continue;
+
+        // 2. Get XObject Dictionary (Images, Forms)
+        const xObjects = resources.get(PDFName.of('XObject'));
+        if (!xObjects || !(xObjects instanceof PDFDict)) continue;
+
+        const keys = xObjects.keys(); // Array of PDFName
+
+        for (const key of keys) {
+            const ref = xObjects.get(key); // This gives us the Reference (e.g., "10 0 R")
+            
+            // We need to lookup the actual object to check its properties
+            const obj = pdfDoc.context.lookup(ref);
+            
+            // We only care about Streams (Images/Forms)
+            if (obj instanceof PDFStream || obj instanceof PDFRawStream) {
+                
+                // 3. Generate a Signature
+                // Reading the full byte array of every image is too slow for the browser.
+                // We use a Heuristic Signature: Length + Subtype + Filter.
+                // This is extremely effective for machine-generated PDFs (Word, PowerPoint) where
+                // the same image is inserted multiple times with identical encoding parameters.
+                
+                let length = 0;
+                // Try to get length from dict
+                const lenEntry = obj.dict.get(PDFName.of('Length'));
+                if (lenEntry) {
+                    const lenVal = pdfDoc.context.lookup(lenEntry);
+                    if (typeof lenVal?.value === 'number') length = lenVal.value;
+                }
+
+                // If we can't determine length, we skip to be safe.
+                if (length > 0) {
+                    const subtype = obj.dict.get(PDFName.of('Subtype'))?.toString() || 'Unknown';
+                    const filter = obj.dict.get(PDFName.of('Filter'))?.toString() || 'None';
+                    
+                    // Signature: "Image_45021_DCTDecode"
+                    const signature = `${subtype}_${length}_${filter}`;
+
+                    if (uniqueAssets.has(signature)) {
+                        // 4. Duplicate Found!
+                        const existingRef = uniqueAssets.get(signature);
+                        
+                        // Check if we are already pointing to the master ref
+                        if (ref !== existingRef) {
+                            // Remap: Tell this page to use the existing reference instead of the duplicate
+                            xObjects.set(key, existingRef);
+                            duplicatesFound++;
+                        }
+                    } else {
+                        // First time seeing this asset, mark it as the master
+                        uniqueAssets.set(signature, ref);
+                    }
+                }
+            }
+        }
+        
+        if (i % 20 === 0) {
+             onProgress(60 + Math.round((i / totalSteps) * 20), `Deduplicating assets (Found ${duplicatesFound})...`);
+             await new Promise(r => setTimeout(r, 0));
+        }
+    }
+    
+    if (duplicatesFound > 0) {
+        console.log(`[Lossless] Removed ${duplicatesFound} duplicate assets.`);
+    }
+};
+
+/**
  * Main Compression Function
  */
 export const compressPDF = async (
@@ -28,7 +116,7 @@ export const compressPDF = async (
         throw new Error("Failed to read file. It might be too large for browser memory.");
     }
     
-    onProgress(30, 'Analyzing structure...');
+    onProgress(20, 'Parsing structure...');
     let pdfDoc;
     try {
         pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
@@ -40,10 +128,12 @@ export const compressPDF = async (
     }
 
     // Dead Object Removal / Garbage Collection
-    onProgress(40, 'Re-packing document structure...');
+    // We create a brand new document and copy pages into it.
+    // This leaves behind any orphaned objects (deleted pages, unused fonts) from the old file.
+    onProgress(30, 'Re-packing document tree...');
     const newDoc = await PDFDocument.create();
 
-    // Copy Metadata
+    // Copy Metadata (Optional stripping)
     if (settings.preserveMetadata) {
        newDoc.setTitle(pdfDoc.getTitle() || '');
        newDoc.setAuthor(pdfDoc.getAuthor() || '');
@@ -57,7 +147,7 @@ export const compressPDF = async (
     }
 
     if (settings.flattenForms) {
-      onProgress(50, 'Flattening form fields...');
+      onProgress(40, 'Flattening form fields...');
       try {
         const form = pdfDoc.getForm();
         if (form.getFields().length > 0) {
@@ -68,7 +158,7 @@ export const compressPDF = async (
       }
     }
 
-    onProgress(60, 'Copying pages & removing waste...');
+    onProgress(50, 'Migrating pages...');
     const indices = pdfDoc.getPageIndices();
     
     // Copying pages in batches
@@ -77,16 +167,17 @@ export const compressPDF = async (
         const batch = indices.slice(i, i + batchSize);
         const copiedPages = await newDoc.copyPages(pdfDoc, batch);
         copiedPages.forEach(p => newDoc.addPage(p));
-        
-        const copyProgress = 60 + Math.round((i / indices.length) * 20);
-        onProgress(copyProgress, `Optimizing page ${i+1} of ${indices.length}...`);
-        
         await new Promise(r => setTimeout(r, 0));
     }
 
-    onProgress(85, 'Finalizing streams...');
+    // FEATURE: Asset Deduplication
+    // Now that we have a clean tree, we scan for duplicate images (Logos, Icons) 
+    // and merge their references.
+    await deduplicateAssets(newDoc, onProgress);
+
+    onProgress(90, 'Compressing streams...');
     const compressedBytes = await newDoc.save({
-      useObjectStreams: true,
+      useObjectStreams: true, // "Vacuum seal" the objects
       addDefaultPage: false,
       objectsPerTick: 50,
     });
@@ -223,16 +314,11 @@ export const compressPDF = async (
                 const maxDim = Math.max(unscaledViewport.width, unscaledViewport.height);
                 
                 // FEATURE 2: Adaptive Resolution (Smart Scaling)
-                // If the user hasn't explicitly set a resolution (e.g. they left default), 
-                // or if we are in auto mode, we can tweak it based on content density.
                 let targetMaxDim = settings.maxResolution || 2000;
                 
-                // If page has a lot of small text (high density), boost resolution for readability
                 if (textLen > 1000) {
                     targetMaxDim = Math.max(targetMaxDim, 2500); 
-                } 
-                // If page is mostly empty or simple image with no text, we can go lower
-                else if (textLen < 50) {
+                } else if (textLen < 50) {
                     targetMaxDim = Math.min(targetMaxDim, 1500);
                 }
 
@@ -262,7 +348,7 @@ export const compressPDF = async (
                     viewport: scaledViewport,
                 }).promise;
 
-                // Pixel Manipulation Loop (Combines Grayscale + Background Cleaning)
+                // Pixel Manipulation Loop
                 if (settings.grayscale || settings.cleanBackground) {
                     const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                     const data = imgData.data;
@@ -271,8 +357,7 @@ export const compressPDF = async (
                         let g = data[j + 1];
                         let b = data[j + 2];
 
-                        // FEATURE 1: Background Cleaning (White Point)
-                        // Force light gray pixels to pure white for better compression
+                        // FEATURE 1: Background Cleaning
                         if (settings.cleanBackground) {
                             if (r > 230 && g > 230 && b > 230) {
                                 r = 255; g = 255; b = 255;
@@ -297,21 +382,18 @@ export const compressPDF = async (
 
                 if (!blob) throw new Error(`Failed to encode page ${i}`);
 
-                // FEATURE 3: OCR Re-injection (Invisible Text Layer)
+                // FEATURE 3: OCR Re-injection
                 let textPositions: any[] = [];
                 if (settings.enableOCR && window.Tesseract) {
                     onProgress(progress, `Page ${i}: Indexing text (OCR)...`);
-                    // We extract text positions from the generated image so coordinates align
                     textPositions = await extractTextPositions(blob);
                 }
 
                 const arrayBufferImg = await blob.arrayBuffer();
                 const embeddedImage = await newPdfDoc.embedJpg(arrayBufferImg);
 
-                // Create page matching compressed dimensions
                 const newPage = newPdfDoc.addPage([scaledViewport.width, scaledViewport.height]);
                 
-                // Draw Image Background
                 newPage.drawImage(embeddedImage, {
                     x: 0,
                     y: 0,
@@ -319,25 +401,14 @@ export const compressPDF = async (
                     height: scaledViewport.height,
                 });
                 
-                // Draw Invisible Text Overlay
                 if (textPositions.length > 0 && ocrFont) {
                     const pageHeight = scaledViewport.height;
                     
                     textPositions.forEach((word) => {
                         const { text, bbox } = word;
-                        // Tesseract bbox: x0, y0, x1, y1 (Pixels from Top-Left)
-                        // PDF-Lib: x, y (Points from Bottom-Left)
-                        
                         const w = bbox.x1 - bbox.x0;
                         const h = bbox.y1 - bbox.y0;
-                        
-                        // Font Size calculation: height of the bounding box
                         const fontSize = h;
-                        
-                        // Y Calculation: PDF Y is inverted.
-                        // Top of word in Image = bbox.y0
-                        // Bottom of word in Image = bbox.y1
-                        // We want text baseline. 
                         const pdfY = pageHeight - bbox.y1;
 
                         newPage.drawText(text, {
@@ -346,7 +417,7 @@ export const compressPDF = async (
                             size: fontSize,
                             font: ocrFont,
                             color: rgb(0, 0, 0),
-                            opacity: 0, // INVISIBLE INK
+                            opacity: 0, 
                         });
                     });
                 }
