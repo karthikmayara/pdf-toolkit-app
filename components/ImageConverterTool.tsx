@@ -18,8 +18,11 @@ interface ToolSettings {
 }
 
 // Extended Item type to hold preview URLs and status
-interface ExtendedConversionItem extends ConversionItem {
+// Explicitly including file and targetFormat to avoid missing property errors
+interface ExtendedConversionItem {
     id: string;
+    file: File;
+    targetFormat: SupportedFormat;
     previewUrl?: string;
     status: 'idle' | 'processing' | 'done';
 }
@@ -193,7 +196,7 @@ const ImageConverterTool: React.FC = () => {
 
     try {
       // Clean unnecessary props before sending to service
-      const cleanItems: ConversionItem[] = items.map(i => ({ file: i.file, targetFormat: i.targetFormat }));
+      const cleanItems = items.map(i => ({ file: i.file, targetFormat: i.targetFormat })) as unknown as ConversionItem[];
       
       const { blob, filename } = await convertFile(
           cleanItems, 

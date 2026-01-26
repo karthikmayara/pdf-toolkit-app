@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { CompressionMode, CompressionSettings, ProcessStatus } from '../types';
 import { compressPDF } from '../services/pdfCompression';
@@ -140,6 +139,7 @@ const CompressTool: React.FC = () => {
     setStatus({ isProcessing: false, currentStep: '', progress: 0, resultBlob: undefined, error: undefined });
     setActivePreset('recommended');
     applyPreset('recommended');
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleBackToOptions = () => {
@@ -160,6 +160,8 @@ const CompressTool: React.FC = () => {
       setActivePreset('recommended');
       applyPreset('recommended');
     }
+    // Clear the input value so the same file can be selected again if needed
+    if (e.target) e.target.value = '';
   };
 
   const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
