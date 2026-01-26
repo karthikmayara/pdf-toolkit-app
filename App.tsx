@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useRef } from 'react';
 import CompressTool from './components/CompressTool';
 import ImageConverterTool from './components/ImageConverterTool';
@@ -14,9 +15,11 @@ import UpdateNotification from './components/UpdateNotification';
 type ToolType = 'compress' | 'convert' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'numbers' | 'rotate' | 'ocr' | null;
 
 const RELEASE_NOTES = {
-  version: 'v2.10.4',
+  version: 'v2.9.5',
   notes: [
-    'NEW ui/ux design inspired by Lumina',
+    '🔧 Fixed Smart Hybrid crash on single page docs',
+    '🚀 Advanced Compression Controls',
+    'New Resolution & Grayscale options',
     'Enhanced Lossless Deduplication'
   ]
 };
@@ -235,9 +238,10 @@ export default function App() {
               {deferredPrompt && (
                 <button
                   onClick={handleInstallClick}
-                  className="hidden sm:flex px-6 py-2.5 rounded-full border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white font-bold text-xs uppercase tracking-widest hover:bg-slate-100 dark:hover:bg-white/10 transition-all"
+                  className="flex items-center gap-2 px-4 py-2 sm:px-6 sm:py-2.5 rounded-full border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white font-bold text-xs uppercase tracking-widest hover:bg-slate-100 dark:hover:bg-white/10 transition-all shadow-sm"
                 >
-                  Get App
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                  <span>Install</span>
                 </button>
               )}
               
