@@ -21,6 +21,8 @@ export interface CompressionSettings {
   flattenForms: boolean; // Option to flatten interactive forms
   preserveMetadata: boolean; // Option to keep title, author, etc.
   autoDetectText?: boolean; // Phase 2: Hybrid Compression (Skip rasterization for text pages)
+  cleanBackground?: boolean; // New: Force near-white pixels to pure white
+  enableOCR?: boolean; // New: Inject invisible text layer
 }
 
 export interface ProcessStatus {

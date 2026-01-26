@@ -32,6 +32,10 @@ const CompressTool: React.FC = () => {
   const [resolution, setResolution] = useState(2000); // 500 - 4000
   const [grayscale, setGrayscale] = useState(false);
   
+  // Advanced Settings for Force Image
+  const [cleanBackground, setCleanBackground] = useState(true);
+  const [enableOCR, setEnableOCR] = useState(false);
+  
   // Derived Settings for the Service
   const settings: CompressionSettings = {
     mode: uiMode === 'lossless' ? CompressionMode.STRUCTURE : CompressionMode.IMAGE,
@@ -40,7 +44,9 @@ const CompressTool: React.FC = () => {
     grayscale: uiMode === 'image' ? grayscale : false,
     flattenForms: false,
     preserveMetadata: false,
-    autoDetectText: uiMode === 'hybrid'
+    autoDetectText: uiMode === 'hybrid',
+    cleanBackground: uiMode === 'image' ? cleanBackground : false,
+    enableOCR: uiMode === 'image' ? enableOCR : false,
   };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -148,6 +154,8 @@ const CompressTool: React.FC = () => {
     setQuality(0.8);
     setResolution(2000);
     setGrayscale(false);
+    setCleanBackground(true);
+    setEnableOCR(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -369,6 +377,7 @@ const CompressTool: React.FC = () => {
 
                                         {/* Force Image Specific Controls */}
                                         {uiMode === 'image' && (
+                                            <>
                                             <div className="grid grid-cols-2 gap-4 animate-fade-in">
                                                 {/* Resolution Slider */}
                                                 <div className="bg-white/5 rounded-xl p-4 border border-white/10 col-span-2 sm:col-span-1">
@@ -401,6 +410,44 @@ const CompressTool: React.FC = () => {
                                                     </label>
                                                 </div>
                                             </div>
+                                            
+                                            {/* Advanced Image Features */}
+                                            <div className="grid grid-cols-2 gap-4 animate-fade-in">
+                                                {/* Clean Background */}
+                                                <div className="bg-white/5 rounded-xl p-4 border border-white/10 col-span-2 sm:col-span-1 flex items-center justify-between">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[10px] uppercase font-bold text-slate-400">Clean BG</span>
+                                                        <span className="text-[9px] text-slate-600">Whitens gray areas</span>
+                                                    </div>
+                                                    <label className="relative inline-flex items-center cursor-pointer">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={cleanBackground} 
+                                                            onChange={(e) => setCleanBackground(e.target.checked)} 
+                                                            className="sr-only peer" 
+                                                        />
+                                                        <div className="w-10 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-cyan-500"></div>
+                                                    </label>
+                                                </div>
+
+                                                {/* OCR Toggle */}
+                                                <div className="bg-white/5 rounded-xl p-4 border border-white/10 col-span-2 sm:col-span-1 flex items-center justify-between">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[10px] uppercase font-bold text-slate-400">OCR Text</span>
+                                                        <span className="text-[9px] text-slate-600">Makes text searchable</span>
+                                                    </div>
+                                                    <label className="relative inline-flex items-center cursor-pointer">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={enableOCR} 
+                                                            onChange={(e) => setEnableOCR(e.target.checked)} 
+                                                            className="sr-only peer" 
+                                                        />
+                                                        <div className="w-10 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-cyan-500"></div>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            </>
                                         )}
                                     </div>
                                 )}

@@ -220,3 +220,45 @@ export const recognizeText = async (
     URL.revokeObjectURL(imageUrl);
   }
 };
+
+/**
+ * Extracts words and their bounding boxes for PDF re-injection
+ */
+export interface TextPosition {
+    text: string;
+    bbox: { x0: number; y0: number; x1: number; y1: number };
+}
+
+export const extractTextPositions = async (
+    imageInput: Blob, 
+    language: string = 'eng'
+): Promise<TextPosition[]> => {
+    const Tesseract = window.Tesseract;
+    if (!Tesseract) return [];
+
+    const imageUrl = URL.createObjectURL(imageInput);
+    try {
+        const worker = await Tesseract.createWorker(language);
+        const result = await worker.recognize(imageUrl);
+        await worker.terminate();
+        
+        const positions: TextPosition[] = [];
+        
+        // Tesseract returns words with 'bbox' (x0, y0, x1, y1) in pixels relative to image
+        result.data.words.forEach((word: any) => {
+            if (word.confidence > 50 && word.text.trim().length > 0) {
+                positions.push({
+                    text: word.text,
+                    bbox: word.bbox
+                });
+            }
+        });
+        
+        return positions;
+    } catch (e) {
+        console.warn("OCR Position Extraction Failed", e);
+        return [];
+    } finally {
+        URL.revokeObjectURL(imageUrl);
+    }
+};
