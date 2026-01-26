@@ -17,7 +17,7 @@ const WatermarkTool: React.FC = () => {
 
   // Settings
   const [settings, setSettings] = useState<WatermarkSettings>({
-    text: 'MAIK',
+    text: 'CONFIDENTIAL',
     color: '#FF0000',
     fontSize: 60,
     opacity: 0.3,
@@ -415,7 +415,7 @@ const WatermarkTool: React.FC = () => {
                                                         style={{ backgroundColor: c }}
                                                     />
                                                 ))}
-                                                <label className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-500 via-purple-500 to-indigo-500 flex items-center justify-center cursor-pointer border-2 border-transparent hover:border-white transition-all">
+                                                <label className="relative w-8 h-8 rounded-full bg-gradient-to-br from-pink-500 via-purple-500 to-indigo-500 flex items-center justify-center cursor-pointer border-2 border-transparent hover:border-white transition-all">
                                                     <input 
                                                         type="color" 
                                                         value={settings.color}

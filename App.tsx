@@ -14,7 +14,7 @@ import UpdateNotification from './components/UpdateNotification';
 type ToolType = 'compress' | 'convert' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'numbers' | 'rotate' | 'ocr' | null;
 
 const RELEASE_NOTES = {
-  version: 'v2.10.2',
+  version: 'v2.10.3',
   notes: [
     'NEW ui/ux design inspired by Lumina',
     'Enhanced Lossless Deduplication'

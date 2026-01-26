@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { ProcessStatus, PageNumberSettings, PageNumberPosition } from '../types';
 import { addPageNumbers } from '../services/pageNumberService';
@@ -33,7 +34,9 @@ const PageNumberTool: React.FC = () => {
   // Auto-scroll to results
   useEffect(() => {
     if (status.resultBlob && resultsRef.current) {
-        resultsRef.current.scrollIntoView({ behavior: 'smooth' });
+        setTimeout(() => {
+            resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 100);
     }
   }, [status.resultBlob]);
 
@@ -108,260 +111,300 @@ const PageNumberTool: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  // Position Grid Component
-  const PositionGrid = () => {
-      const positions: PageNumberPosition[] = [
-          'top-left', 'top-center', 'top-right',
-          'bottom-left', 'bottom-center', 'bottom-right'
-      ];
-      
-      return (
-          <div className="bg-slate-100 dark:bg-slate-900 rounded-lg p-2 aspect-[3/4] grid grid-rows-3 relative border border-slate-200 dark:border-slate-700 max-w-[140px] mx-auto shadow-inner">
-              {/* Top Row */}
-              <div className="flex justify-between items-start">
-                   {positions.slice(0, 3).map(pos => (
-                       <button 
-                         key={pos}
-                         onClick={() => setSettings(s => ({...s, position: pos}))}
-                         className={`w-6 h-6 rounded-full border-2 transition-all hover:scale-110 flex items-center justify-center ${settings.position === pos ? 'bg-cyan-500 border-cyan-600 shadow-md ring-2 ring-cyan-200' : 'bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 hover:border-cyan-400'}`}
-                         title={pos.replace('-', ' ')}
-                       >
-                           {settings.position === pos && <div className="w-2 h-2 bg-white rounded-full"></div>}
-                       </button>
-                   ))}
-              </div>
-
-              {/* Middle (Spacer/Preview Text) */}
-              <div className="flex items-center justify-center">
-                  <span className="text-[10px] text-slate-400 font-medium opacity-50 select-none">PAGE</span>
-              </div>
-
-              {/* Bottom Row */}
-              <div className="flex justify-between items-end">
-                   {positions.slice(3, 6).map(pos => (
-                       <button 
-                         key={pos}
-                         onClick={() => setSettings(s => ({...s, position: pos}))}
-                         className={`w-6 h-6 rounded-full border-2 transition-all hover:scale-110 flex items-center justify-center ${settings.position === pos ? 'bg-cyan-500 border-cyan-600 shadow-md ring-2 ring-cyan-200' : 'bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 hover:border-cyan-400'}`}
-                         title={pos.replace('-', ' ')}
-                       >
-                           {settings.position === pos && <div className="w-2 h-2 bg-white rounded-full"></div>}
-                       </button>
-                   ))}
-              </div>
-          </div>
-      );
+  // Format Helper Display
+  const getSampleText = () => {
+      if (settings.format === 'n') return '1';
+      if (settings.format === 'page-n') return 'Page 1';
+      if (settings.format === 'n-of-total') return '1 of 5';
+      if (settings.format === 'page-n-of-total') return 'Page 1 of 5';
+      return '1';
   };
 
   return (
-    <div className="max-w-4xl mx-auto animate-fade-in pb-20">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden border border-slate-100 dark:border-slate-700 transition-colors duration-300">
+    <div className="max-w-7xl mx-auto animate-fade-in pb-12 px-4 sm:px-6">
+      
+      {/* Main Container */}
+      <div className="bg-[#0f172a] text-white rounded-[2rem] shadow-2xl overflow-hidden min-h-[600px] flex flex-col md:flex-row relative">
         
-        {/* Header */}
-        <div className="bg-gradient-to-r from-cyan-600 to-teal-600 p-8 text-white text-center">
-          <h2 className="text-3xl font-bold mb-2">Page Numbers</h2>
-          <p className="opacity-90">Add numbering to your PDF documents instantly.</p>
-        </div>
+        {/* Close/Reset Button */}
+        {file && !status.isProcessing && (
+            <button 
+                onClick={resetState}
+                className="absolute top-4 right-4 z-50 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center backdrop-blur-md transition-all"
+                title="Close / Reset"
+            >
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        )}
 
-        <div className="p-4 sm:p-8">
+        {/* LEFT COLUMN: INTERACTIVE PREVIEW STAGE */}
+        <div 
+            className={`
+                relative md:w-1/2 min-h-[400px] md:min-h-full transition-all duration-500 overflow-hidden flex flex-col
+                ${!file ? 'bg-gradient-to-br from-indigo-900 to-[#0f172a] items-center justify-center' : 'bg-black/30'}
+            `}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={() => !file && fileInputRef.current?.click()}
+        >
             {!file ? (
-                <div 
-                    onClick={() => fileInputRef.current?.click()}
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
-                    className={`
-                        border-4 border-dashed rounded-xl p-16 text-center cursor-pointer transition-all duration-200 group
-                        ${isDragging 
-                        ? 'border-cyan-500 bg-cyan-50 dark:bg-slate-700 scale-102' 
-                        : 'border-slate-200 dark:border-slate-600 hover:border-cyan-400 dark:hover:border-cyan-500 hover:bg-slate-50 dark:hover:bg-slate-700/50'}
-                    `}
-                    >
-                    <div className="text-6xl mb-6 group-hover:scale-110 transition-transform">🔢</div>
-                    <h3 className="text-xl font-bold text-slate-700 dark:text-slate-200 mb-2">Select PDF File</h3>
-                    <p className="text-slate-500 dark:text-slate-400">or drop it here</p>
+                <div className={`text-center p-8 cursor-pointer transition-transform duration-300 ${isDragging ? 'scale-105' : ''}`}>
+                    <div className="w-32 h-32 bg-indigo-500/20 rounded-full flex items-center justify-center mx-auto mb-6 backdrop-blur-sm border border-indigo-500/30">
+                        <svg className="w-12 h-12 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                    </div>
+                    <h3 className="text-2xl font-bold tracking-tight mb-2">Upload PDF</h3>
+                    <p className="text-indigo-200/60 text-sm font-medium uppercase tracking-widest">Drag & Drop or Click</p>
                 </div>
             ) : (
-                <div className="space-y-8 animate-fade-in">
-                    
-                    {/* Toolbar */}
-                    <div className="flex justify-between items-center bg-slate-50 dark:bg-slate-700/50 p-4 rounded-xl border border-slate-200 dark:border-slate-600">
-                        <div className="flex items-center gap-3">
-                            <div className="text-2xl">📄</div>
-                            <div className="min-w-0">
-                                <h4 className="font-bold text-slate-700 dark:text-slate-200 truncate max-w-[200px]">{file.name}</h4>
-                                <p className="text-xs text-slate-500 dark:text-slate-400">{formatBytes(file.size)}</p>
-                            </div>
+                <div className="w-full h-full flex flex-col items-center justify-center p-8 relative">
+                    <div className="absolute top-6 left-6 flex items-center gap-3 opacity-70">
+                        <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center">
+                            <span className="text-xl">📄</span>
                         </div>
-                        <button 
-                            onClick={resetState}
-                            className="text-xs font-bold text-red-500 hover:text-red-600 bg-white dark:bg-slate-800 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600"
-                            disabled={status.isProcessing}
-                        >
-                            Change File
-                        </button>
+                        <div>
+                            <div className="text-xs font-bold text-white max-w-[200px] truncate">{file.name}</div>
+                            <div className="text-[10px] text-slate-400 font-mono">{formatBytes(file.size)}</div>
+                        </div>
                     </div>
 
-                    {!status.resultBlob ? (
-                        <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
-                            
-                            {/* LEFT: Visual Preview & Position */}
-                            <div className="md:col-span-4 flex flex-col gap-4">
-                                <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6 shadow-sm">
-                                    <h4 className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-4 text-center tracking-wide">Position</h4>
-                                    <PositionGrid />
-                                    <p className="text-center text-xs text-slate-400 mt-4">Click dots to place number</p>
-                                </div>
-                            </div>
-
-                            {/* RIGHT: Configuration */}
-                            <div className="md:col-span-8 space-y-6">
-                                <div className="bg-slate-50 dark:bg-slate-700/30 rounded-xl border border-slate-200 dark:border-slate-700 p-6 space-y-6">
-                                    
-                                    {/* Format Selection */}
-                                    <div>
-                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Number Format</label>
-                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                            {[
-                                                { id: 'n', label: '1' },
-                                                { id: 'page-n', label: 'Page 1' },
-                                                { id: 'n-of-total', label: '1 of N' },
-                                                { id: 'page-n-of-total', label: 'Page 1 of N' }
-                                            ].map(fmt => (
-                                                <button
-                                                    key={fmt.id}
-                                                    onClick={() => setSettings(s => ({...s, format: fmt.id as any}))}
-                                                    className={`py-2 px-3 text-sm font-medium rounded-lg border transition-all ${settings.format === fmt.id ? 'bg-cyan-50 border-cyan-500 text-cyan-700 dark:bg-cyan-900/20 dark:border-cyan-500 dark:text-cyan-300' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:border-cyan-300'}`}
-                                                >
-                                                    {fmt.label}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* Sliders Row */}
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                                        <div>
-                                            <div className="flex justify-between mb-2">
-                                                <label className="text-sm font-bold text-slate-700 dark:text-slate-300">Margin from Edge</label>
-                                                <span className="text-xs bg-slate-200 dark:bg-slate-600 px-2 rounded font-mono">{settings.margin}pt</span>
-                                            </div>
-                                            <input 
-                                                type="range" min="0" max="100" 
-                                                value={settings.margin} 
-                                                onChange={(e) => setSettings(s => ({...s, margin: Number(e.target.value)}))}
-                                                className="w-full h-2 bg-slate-200 dark:bg-slate-600 rounded-lg appearance-none cursor-pointer accent-cyan-600"
-                                            />
-                                        </div>
-                                        <div>
-                                            <div className="flex justify-between mb-2">
-                                                <label className="text-sm font-bold text-slate-700 dark:text-slate-300">Font Size</label>
-                                                <span className="text-xs bg-slate-200 dark:bg-slate-600 px-2 rounded font-mono">{settings.fontSize}pt</span>
-                                            </div>
-                                            <input 
-                                                type="range" min="6" max="32" 
-                                                value={settings.fontSize} 
-                                                onChange={(e) => setSettings(s => ({...s, fontSize: Number(e.target.value)}))}
-                                                className="w-full h-2 bg-slate-200 dark:bg-slate-600 rounded-lg appearance-none cursor-pointer accent-cyan-600"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    {/* Toggles */}
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-200 dark:border-slate-600">
-                                        <div className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-600">
-                                            <div>
-                                                <span className="block text-sm font-bold text-slate-700 dark:text-slate-200">Skip First Page</span>
-                                                <span className="text-xs text-slate-400">Don't number the cover</span>
-                                            </div>
-                                            <input 
-                                                type="checkbox" 
-                                                checked={settings.skipFirst}
-                                                onChange={(e) => setSettings(s => ({...s, skipFirst: e.target.checked}))}
-                                                className="w-5 h-5 text-cyan-600 rounded focus:ring-cyan-500"
-                                            />
-                                        </div>
-                                        <div className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-600">
-                                            <div>
-                                                <span className="block text-sm font-bold text-slate-700 dark:text-slate-200">Start Count At</span>
-                                                <span className="text-xs text-slate-400">Custom starting number</span>
-                                            </div>
-                                            <input 
-                                                type="number" min="1" max="999"
-                                                value={settings.startFrom}
-                                                onChange={(e) => setSettings(s => ({...s, startFrom: Number(e.target.value)}))}
-                                                className="w-16 p-1 text-right text-sm font-bold border rounded bg-slate-50 dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100 outline-none focus:border-cyan-500"
-                                            />
-                                        </div>
-                                    </div>
-
-                                </div>
-
-                                {/* Progress */}
-                                {status.isProcessing && (
-                                    <div className="space-y-2">
-                                        <div className="flex justify-between text-xs font-bold uppercase text-slate-500 dark:text-slate-400 tracking-wider">
-                                            <span className="animate-pulse">{status.currentStep}</span>
-                                            <span>{status.progress}%</span>
-                                        </div>
-                                        <div className="h-4 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                                            <div 
-                                            className="h-full bg-cyan-500 transition-all duration-300 ease-out" 
-                                            style={{ width: `${status.progress}%` }}
-                                            ></div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Error */}
-                                {status.error && (
-                                    <div className="bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 p-4 rounded-xl border border-red-200 dark:border-red-800 text-sm font-medium">
-                                        {status.error}
-                                    </div>
-                                )}
-
-                                {/* Action Button */}
-                                <button
-                                    onClick={handleStart}
-                                    disabled={status.isProcessing}
-                                    className="w-full py-4 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl font-bold text-lg shadow-lg shadow-cyan-200 dark:shadow-none transition-all active:scale-[0.98] disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                                >
-                                    {status.isProcessing ? 'Adding Numbers...' : 'Add Page Numbers'}
-                                </button>
-                            </div>
+                    {/* VIRTUAL PAGE PREVIEW */}
+                    <div className="relative w-full max-w-[340px] aspect-[1/1.414] bg-white rounded-lg shadow-2xl transition-all duration-300 transform md:scale-100 scale-90">
+                        {/* Mock Text Lines for realism */}
+                        <div className="absolute top-8 left-8 right-8 space-y-4 opacity-10 pointer-events-none">
+                            <div className="h-4 bg-slate-900 rounded w-3/4"></div>
+                            <div className="h-2 bg-slate-900 rounded w-full"></div>
+                            <div className="h-2 bg-slate-900 rounded w-full"></div>
+                            <div className="h-2 bg-slate-900 rounded w-5/6"></div>
+                            <div className="h-32 bg-slate-900 rounded w-full mt-8"></div>
                         </div>
-                    ) : (
-                        /* Results Dashboard */
-                        <div ref={resultsRef} className="text-center animate-fade-in-up py-4">
-                            <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full mb-6">
-                                <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+
+                        {/* Interactive Click Zones */}
+                        {[
+                            'top-left', 'top-center', 'top-right',
+                            'bottom-left', 'bottom-center', 'bottom-right'
+                        ].map((pos) => {
+                            const isSelected = settings.position === pos;
+                            const isTop = pos.includes('top');
+                            const isBottom = pos.includes('bottom');
+                            const isLeft = pos.includes('left');
+                            const isRight = pos.includes('right');
+                            const isCenter = pos.includes('center');
+
+                            // Classes for positioning the zones
+                            let posClass = '';
+                            if (isTop) posClass += 'top-0 ';
+                            if (isBottom) posClass += 'bottom-0 ';
+                            if (isLeft) posClass += 'left-0 ';
+                            if (isRight) posClass += 'right-0 ';
+                            if (isCenter) posClass += 'left-1/2 -translate-x-1/2 ';
+
+                            return (
+                                <div
+                                    key={pos}
+                                    onClick={() => setSettings(s => ({...s, position: pos as PageNumberPosition}))}
+                                    className={`
+                                        absolute w-24 h-24 flex items-center justify-center cursor-pointer transition-all duration-200 z-10
+                                        ${posClass}
+                                        ${isSelected ? 'opacity-100 scale-100' : 'opacity-0 hover:opacity-50 hover:bg-indigo-500/10'}
+                                    `}
+                                >
+                                    {/* The Number Stamp */}
+                                    <div className={`
+                                        px-3 py-1 rounded text-slate-900 font-bold transition-all duration-300
+                                        ${isSelected ? 'bg-indigo-100 text-indigo-700 ring-2 ring-indigo-500 shadow-lg' : 'bg-transparent border border-dashed border-slate-300'}
+                                    `}
+                                    style={{ fontSize: Math.max(10, settings.fontSize * 0.8) + 'px' }} // Scaled font for preview
+                                    >
+                                        {isSelected ? getSampleText() : '+'}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                        
+                        {/* Instruction Label */}
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
+                            <span className="text-4xl font-black text-slate-300 -rotate-12">PREVIEW</span>
+                        </div>
+                    </div>
+                    
+                    <p className="mt-6 text-xs font-bold text-slate-500 uppercase tracking-widest">Click page corners to positioning</p>
+                </div>
+            )}
+        </div>
+
+        {/* RIGHT COLUMN: CONTROLS */}
+        <div className="md:w-1/2 p-8 md:p-12 flex flex-col justify-center relative bg-[#0f172a] z-10 border-t md:border-t-0 md:border-l border-white/5">
+            
+            {/* Header */}
+            <div className="mb-8 shrink-0">
+                <div className="flex items-center gap-3 mb-2 text-indigo-400 font-bold text-xs tracking-[0.2em] uppercase">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"></path></svg>
+                    Organize & Index
+                </div>
+                <h2 className="text-5xl font-black text-white leading-[0.9] tracking-tighter">
+                    PAGINATION
+                </h2>
+            </div>
+
+            {!status.resultBlob ? (
+                /* CONFIGURATION VIEW */
+                <div className={`space-y-8 animate-fade-in ${status.isProcessing ? 'opacity-50 pointer-events-none' : ''}`}>
+                    {file && (
+                        <>
+                            {/* Format Selection */}
+                            <div>
+                                <label className="text-[10px] font-bold uppercase text-slate-500 mb-3 block tracking-wider">Number Format</label>
+                                <div className="grid grid-cols-2 gap-3">
+                                    {[
+                                        { id: 'n', label: '1' },
+                                        { id: 'page-n', label: 'Page 1' },
+                                        { id: 'n-of-total', label: '1 of N' },
+                                        { id: 'page-n-of-total', label: 'Page 1 of N' }
+                                    ].map(fmt => (
+                                        <button
+                                            key={fmt.id}
+                                            onClick={() => setSettings(s => ({...s, format: fmt.id as any}))}
+                                            className={`py-3 px-4 rounded-xl border text-xs font-bold transition-all
+                                                ${settings.format === fmt.id 
+                                                    ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/20' 
+                                                    : 'bg-[#1e293b] border-white/5 text-slate-400 hover:text-white hover:border-white/20'}
+                                            `}
+                                        >
+                                            {fmt.label}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
-                            <h3 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">Numbers Added Successfully!</h3>
-                            <p className="text-slate-500 dark:text-slate-400 mb-8">Your document is ready for download.</p>
-                            
-                            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                                <button 
-                                    onClick={handleDownload}
-                                    className="px-8 py-4 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl font-bold shadow-lg shadow-cyan-200 dark:shadow-none transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
-                                >
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                                    Download PDF
-                                </button>
-                                <button 
-                                    onClick={() => setStatus({isProcessing:false, currentStep:'', progress:0})}
-                                    className="px-8 py-4 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-600 transition-all"
-                                >
-                                    Modify Settings
-                                </button>
-                                <button 
-                                    onClick={resetState}
-                                    className="px-8 py-4 bg-white dark:bg-transparent border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 rounded-xl font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all"
-                                >
-                                    New File
-                                </button>
+
+                            {/* Sliders Grid */}
+                            <div className="grid grid-cols-2 gap-6">
+                                {/* Font Size */}
+                                <div>
+                                    <div className="flex justify-between text-[10px] font-bold uppercase text-slate-500 mb-2 tracking-wider">
+                                        <span>Font Size</span>
+                                        <span className="text-white">{settings.fontSize}px</span>
+                                    </div>
+                                    <input 
+                                        type="range" min="8" max="48" 
+                                        value={settings.fontSize} 
+                                        onChange={(e) => setSettings(s => ({...s, fontSize: Number(e.target.value)}))}
+                                        className="w-full h-1.5 bg-[#1e293b] rounded-full appearance-none cursor-pointer accent-indigo-500 hover:accent-indigo-400"
+                                    />
+                                </div>
+
+                                {/* Margin */}
+                                <div>
+                                    <div className="flex justify-between text-[10px] font-bold uppercase text-slate-500 mb-2 tracking-wider">
+                                        <span>Edge Margin</span>
+                                        <span className="text-white">{settings.margin}px</span>
+                                    </div>
+                                    <input 
+                                        type="range" min="0" max="100" 
+                                        value={settings.margin} 
+                                        onChange={(e) => setSettings(s => ({...s, margin: Number(e.target.value)}))}
+                                        className="w-full h-1.5 bg-[#1e293b] rounded-full appearance-none cursor-pointer accent-indigo-500 hover:accent-indigo-400"
+                                    />
+                                </div>
                             </div>
+
+                            {/* Toggles & Inputs */}
+                            <div className="space-y-4">
+                                {/* Skip Cover */}
+                                <div className="flex items-center justify-between bg-[#1e293b] p-4 rounded-xl border border-white/5">
+                                    <div>
+                                        <span className="block text-xs font-bold text-white">Skip Cover Page</span>
+                                        <span className="text-[10px] text-slate-400">Do not number the first page</span>
+                                    </div>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={settings.skipFirst} 
+                                            onChange={(e) => setSettings(s => ({...s, skipFirst: e.target.checked}))} 
+                                            className="sr-only peer" 
+                                        />
+                                        <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
+                                    </label>
+                                </div>
+
+                                {/* Start Count */}
+                                <div className="flex items-center justify-between bg-[#1e293b] p-4 rounded-xl border border-white/5">
+                                    <div>
+                                        <span className="block text-xs font-bold text-white">Start Count At</span>
+                                        <span className="text-[10px] text-slate-400">Offset numbering sequence</span>
+                                    </div>
+                                    <input 
+                                        type="number" min="1" max="999"
+                                        value={settings.startFrom}
+                                        onChange={(e) => setSettings(s => ({...s, startFrom: Number(e.target.value)}))}
+                                        className="w-16 bg-black/30 border border-white/10 rounded-lg p-2 text-center text-white font-mono text-sm focus:outline-none focus:border-indigo-500"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Processing Bar */}
+                            {status.isProcessing && (
+                                <div className="space-y-2">
+                                    <div className="flex justify-between text-[10px] font-bold uppercase text-indigo-300 tracking-wider">
+                                        <span className="animate-pulse">{status.currentStep}</span>
+                                        <span>{status.progress}%</span>
+                                    </div>
+                                    <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+                                        <div className="h-full bg-indigo-500 transition-all duration-300" style={{ width: `${status.progress}%` }}></div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Error */}
+                            {status.error && (
+                                <p className="text-red-400 text-xs font-bold bg-red-500/10 p-3 rounded-lg border border-red-500/20">{status.error}</p>
+                            )}
+
+                            {/* Action Button */}
+                            {!status.isProcessing && (
+                                <button 
+                                    onClick={handleStart}
+                                    className="w-full py-4 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white rounded-xl font-bold uppercase tracking-widest text-xs transition-all shadow-lg shadow-indigo-900/20 flex items-center justify-center gap-2 group mt-4"
+                                >
+                                    <span>Apply Numbers</span>
+                                    <svg className="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                                </button>
+                            )}
+                        </>
+                    )}
+                    
+                    {!file && (
+                        <div className="text-slate-500 text-sm font-medium italic opacity-50">
+                            Upload a PDF to configure pagination.
                         </div>
                     )}
+                </div>
+            ) : (
+                /* RESULT VIEW */
+                <div ref={resultsRef} className="flex flex-col h-full animate-fade-in space-y-6">
+                    <div className="flex-1 bg-[#1e293b] rounded-xl p-6 border border-white/5 flex flex-col justify-center items-center text-center">
+                        <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center mb-4 border border-green-500/20">
+                            <svg className="w-10 h-10 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                        </div>
+                        <h3 className="text-xl font-bold text-white mb-1">Pagination Complete!</h3>
+                        <p className="text-slate-400 text-xs">Numbers have been added to your document.</p>
+                    </div>
+
+                    <div className="flex gap-4 pt-2 shrink-0">
+                        <button 
+                            onClick={handleDownload}
+                            className="flex-1 py-4 bg-white text-[#0f172a] rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-green-400 hover:text-white transition-colors shadow-lg flex items-center justify-center gap-2"
+                        >
+                            <span>Download</span>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        </button>
+                        <button 
+                            onClick={() => setStatus({isProcessing:false, currentStep:'', progress:0})}
+                            className="px-6 py-4 bg-transparent border border-slate-700 text-white rounded-xl font-bold uppercase tracking-widest text-xs hover:border-white transition-colors"
+                        >
+                            Back
+                        </button>
+                    </div>
                 </div>
             )}
         </div>

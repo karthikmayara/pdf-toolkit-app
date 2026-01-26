@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { ProcessStatus } from '../types';
 import { rotateDocument } from '../services/rotateService';
@@ -5,6 +6,111 @@ import { rotateDocument } from '../services/rotateService';
 // Constants
 const ITEMS_PER_PAGE = 48; // Pagination for large PDFs
 
+// Helper for formatting bytes
+const formatBytes = (bytes: number, decimals = 2) => {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+};
+
+// --- THUMBNAIL COMPONENT ---
+const RotateThumbnail = React.memo(({ pageIndex, rotation, onRotate, pdf, imageFile }: { pageIndex: number, rotation: number, onRotate: (deg: number) => void, pdf: any, imageFile: File | null }) => {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const [loaded, setLoaded] = useState(false);
+
+    useEffect(() => {
+        if ((!pdf && !imageFile) || loaded) return;
+
+        let active = true;
+        const render = async () => {
+            try {
+                const canvas = canvasRef.current;
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return;
+
+                if (pdf) {
+                    const page = await pdf.getPage(pageIndex + 1);
+                    const viewport = page.getViewport({ scale: 0.3 }); // Small scale for speed
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+                    await page.render({ canvasContext: ctx, viewport }).promise;
+                } else if (imageFile) {
+                    const img = new Image();
+                    img.src = URL.createObjectURL(imageFile);
+                    await new Promise(r => img.onload = r);
+                    const scale = 200 / Math.max(img.width, img.height);
+                    canvas.width = img.width * scale;
+                    canvas.height = img.height * scale;
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                }
+                
+                if (active) setLoaded(true);
+            } catch (e) {
+                console.warn("Render error", e);
+            }
+        };
+        render();
+        return () => { active = false; };
+    }, [pdf, imageFile, pageIndex, loaded]);
+
+    return (
+        <div className="relative group">
+            <div 
+                onClick={() => onRotate(90)} // Tap rotates CW
+                className={`
+                    relative aspect-[3/4] bg-[#1e293b] rounded-xl overflow-hidden cursor-pointer transition-all duration-300 border-2
+                    ${rotation !== 0 ? 'border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.2)]' : 'border-transparent hover:border-white/20'}
+                `}
+            >
+                <div className="w-full h-full flex items-center justify-center p-2">
+                    {/* The Rotating Wrapper */}
+                    <div 
+                        className="transition-transform duration-300 ease-out origin-center shadow-lg"
+                        style={{ transform: `rotate(${rotation}deg)` }}
+                    >
+                        <canvas ref={canvasRef} className="max-w-full max-h-full block object-contain rounded-sm" />
+                    </div>
+                </div>
+
+                {/* Overlay Controls (Desktop Hover) */}
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-[1px]">
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); onRotate(-90); }}
+                        className="p-2 bg-white text-slate-900 rounded-full hover:scale-110 transition-transform"
+                        title="Rotate Left"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path></svg>
+                    </button>
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); onRotate(90); }}
+                        className="p-2 bg-white text-slate-900 rounded-full hover:scale-110 transition-transform"
+                        title="Rotate Right"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 10h-10a8 8 0 00-8 8v2M21 10l-6 6m6-6l-6-6"></path></svg>
+                    </button>
+                </div>
+
+                {/* Page Number */}
+                <div className="absolute top-2 left-2 bg-black/60 text-white text-[10px] font-bold px-2 py-1 rounded-full backdrop-blur-md z-10 pointer-events-none border border-white/10">
+                    {pageIndex + 1}
+                </div>
+                
+                {/* Rotation Badge (if changed) */}
+                {rotation !== 0 && (
+                    <div className="absolute top-2 right-2 bg-amber-500 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-sm z-10 animate-pop">
+                        {rotation}°
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+});
+
+// --- MAIN TOOL ---
 const RotateTool: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<ProcessStatus>({ isProcessing: false, currentStep: '', progress: 0 });
@@ -19,13 +125,17 @@ const RotateTool: React.FC = () => {
   
   // UI State
   const [viewPage, setViewPage] = useState(1);
+  const [isDragging, setIsDragging] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll
   useEffect(() => {
     if (status.resultBlob && resultsRef.current) {
-        resultsRef.current.scrollIntoView({ behavior: 'smooth' });
+        setTimeout(() => {
+            resultsRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
     }
   }, [status.resultBlob]);
 
@@ -64,6 +174,14 @@ const RotateTool: React.FC = () => {
       setStatus({ isProcessing: false, currentStep: '', progress: 0 });
     }
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        setFile(e.dataTransfer.files[0]);
+    }
   };
 
   // Rotation Logic
@@ -148,218 +266,222 @@ const RotateTool: React.FC = () => {
       return idxs;
   }, [currentGridStartIndex, currentGridEndIndex]);
 
+  const modifiedCount = Object.values(rotations).filter(r => r !== 0).length;
+
   return (
-    <div className="max-w-7xl mx-auto animate-fade-in pb-24">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden border border-slate-100 dark:border-slate-700 flex flex-col h-[calc(100vh-140px)] min-h-[500px] transition-colors duration-300 relative">
+    <div className="max-w-7xl mx-auto animate-fade-in pb-12 px-4 sm:px-6">
+      
+      {/* Main Container */}
+      <div className="bg-[#0f172a] text-white rounded-[2rem] shadow-2xl overflow-hidden min-h-[600px] flex flex-col md:flex-row relative">
         
-        {/* Header */}
-        <div className="bg-gradient-to-r from-amber-500 to-orange-600 p-4 md:p-6 text-white shrink-0 flex justify-between items-center">
-          <div>
-            <h2 className="text-xl md:text-2xl font-bold">Rotate PDF</h2>
-            <p className="opacity-90 text-xs md:text-sm">Tap pages to rotate or use global controls.</p>
-          </div>
-          {file && (
-             <button onClick={resetState} className="text-[10px] md:text-xs bg-white/20 hover:bg-white/30 px-3 py-1 rounded-lg text-white font-bold transition-colors">
-                 Change File
-             </button>
-          )}
+        {/* Close/Reset Button */}
+        {file && !status.isProcessing && (
+            <button 
+                onClick={resetState}
+                className="absolute top-4 right-4 z-50 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center backdrop-blur-md transition-all"
+                title="Close / Reset"
+            >
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        )}
+
+        {/* LEFT COLUMN: VISUAL STAGE */}
+        <div 
+            className={`
+                relative md:w-7/12 min-h-[400px] md:min-h-full transition-all duration-500 overflow-hidden flex flex-col
+                ${!file ? 'bg-gradient-to-br from-indigo-900 to-[#0f172a] items-center justify-center' : 'bg-black/20'}
+            `}
+            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+            onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
+            onDrop={handleDrop}
+            onClick={() => !file && fileInputRef.current?.click()}
+        >
+            {!file ? (
+                <div className={`text-center p-8 cursor-pointer transition-transform duration-300 ${isDragging ? 'scale-105' : ''}`}>
+                    <div className="w-32 h-32 bg-indigo-500/20 rounded-full flex items-center justify-center mx-auto mb-6 backdrop-blur-sm border border-indigo-500/30">
+                        <svg className="w-12 h-12 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                    </div>
+                    <h3 className="text-2xl font-bold tracking-tight mb-2">Upload File</h3>
+                    <p className="text-indigo-200/60 text-sm font-medium uppercase tracking-widest">PDF or Image</p>
+                </div>
+            ) : (
+                <div className="flex-1 flex flex-col relative h-full">
+                     {/* Grid */}
+                     <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+                        <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-4 gap-4 pb-20">
+                            {visiblePageIndices.map(idx => (
+                                <RotateThumbnail 
+                                    key={idx}
+                                    pageIndex={idx}
+                                    rotation={rotations[idx] || 0}
+                                    onRotate={(deg) => rotatePage(idx, deg)}
+                                    pdf={pdfDocProxy}
+                                    imageFile={file.type.startsWith('image/') ? file : null}
+                                />
+                            ))}
+                        </div>
+                     </div>
+
+                     {/* Pagination Controls (Floating) */}
+                     {totalGridPages > 1 && (
+                        <div className="absolute bottom-4 left-0 right-0 flex justify-center pointer-events-none">
+                            <div className="bg-[#0f172a]/90 backdrop-blur-md border border-white/10 px-4 py-2 rounded-full pointer-events-auto flex items-center gap-4 text-xs font-bold text-slate-300">
+                                <button onClick={() => setViewPage(p => Math.max(1, p - 1))} disabled={viewPage === 1} className="hover:text-white disabled:opacity-30">◀</button>
+                                <span>Page {viewPage} / {totalGridPages}</span>
+                                <button onClick={() => setViewPage(p => Math.min(totalGridPages, p + 1))} disabled={viewPage === totalGridPages} className="hover:text-white disabled:opacity-30">▶</button>
+                            </div>
+                        </div>
+                     )}
+                </div>
+            )}
+            
+            {file && isDragging && (
+                <div className="absolute inset-0 bg-indigo-900/80 backdrop-blur-sm z-50 flex items-center justify-center">
+                    <h3 className="text-2xl font-bold text-white animate-bounce">Drop to Replace</h3>
+                </div>
+            )}
         </div>
 
-        {!file ? (
-            <div className="flex-1 flex items-center justify-center p-8">
-                <div 
-                  onClick={() => fileInputRef.current?.click()}
-                  className="border-4 border-dashed border-slate-300 dark:border-slate-600 hover:border-amber-400 dark:hover:border-amber-500 rounded-2xl p-10 md:p-16 text-center cursor-pointer transition-all bg-slate-50 dark:bg-slate-700/30 group max-w-xl w-full"
-                >
-                   <div className="text-5xl md:text-6xl mb-6 group-hover:scale-110 transition-transform">↻</div>
-                   <h3 className="text-xl md:text-2xl font-bold text-slate-700 dark:text-slate-200 mb-2">Select File to Rotate</h3>
-                   <p className="text-sm md:text-base text-slate-500 dark:text-slate-400">PDFs and Images supported</p>
+        {/* RIGHT COLUMN: CONTROLS */}
+        <div className="md:w-5/12 p-8 md:p-12 flex flex-col justify-center relative bg-[#0f172a] z-10 border-t md:border-t-0 md:border-l border-white/5">
+            
+            {/* Header */}
+            <div className="mb-8 shrink-0">
+                <div className="flex items-center gap-3 mb-2 text-indigo-400 font-bold text-xs tracking-[0.2em] uppercase">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                    Fix Orientation
                 </div>
+                <h2 className="text-5xl font-black text-white leading-[0.9] tracking-tighter">
+                    ROTATE
+                </h2>
             </div>
-        ) : !status.resultBlob ? (
-            <>
-                {/* Global Controls Bar (Top) */}
-                <div className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 p-3 flex justify-between items-center shrink-0 gap-2">
-                    <div className="flex gap-2">
-                        <button onClick={() => rotateAll(-90)} className="px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-1">
-                            <span className="text-lg leading-none">↺</span> All Left
-                        </button>
-                        <button onClick={() => rotateAll(90)} className="px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-1">
-                            <span className="text-lg leading-none">↻</span> All Right
-                        </button>
-                    </div>
-                    <button onClick={resetRotations} className="text-xs text-slate-500 hover:text-red-500 font-bold px-2">
-                        Reset
-                    </button>
-                </div>
 
-                {/* Grid View */}
-                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-slate-100 dark:bg-slate-800/50">
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 pb-20">
-                        {visiblePageIndices.map(idx => (
-                            <RotateThumbnail 
-                                key={idx}
-                                pageIndex={idx}
-                                rotation={rotations[idx] || 0}
-                                onRotate={(deg) => rotatePage(idx, deg)}
-                                pdf={pdfDocProxy}
-                                imageFile={file.type.startsWith('image/') ? file : null}
-                            />
-                        ))}
-                    </div>
-                </div>
+            {!status.resultBlob ? (
+                /* CONFIGURATION VIEW */
+                <div className={`space-y-8 animate-fade-in ${status.isProcessing ? 'opacity-50 pointer-events-none' : ''}`}>
+                    {file && (
+                        <>
+                            {/* Stats */}
+                            <div className="grid grid-cols-2 gap-8 border-y border-white/10 py-6">
+                                <div>
+                                    <p className="text-[10px] font-bold uppercase text-slate-500 mb-1 tracking-wider">Total Pages</p>
+                                    <p className="text-2xl font-mono font-bold text-white">{numPages}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-bold uppercase text-slate-500 mb-1 tracking-wider">Modified</p>
+                                    <p className={`text-2xl font-mono font-bold ${modifiedCount > 0 ? 'text-amber-400' : 'text-slate-500'}`}>{modifiedCount}</p>
+                                </div>
+                            </div>
 
-                {/* Pagination (if needed) */}
-                {totalGridPages > 1 && (
-                    <div className="absolute bottom-20 left-0 right-0 flex justify-center pointer-events-none">
-                        <div className="bg-slate-800/90 text-white px-4 py-2 rounded-full shadow-lg pointer-events-auto flex items-center gap-4 text-xs font-bold backdrop-blur">
-                            <button onClick={() => setViewPage(p => Math.max(1, p - 1))} disabled={viewPage === 1} className="disabled:opacity-50 hover:text-amber-400">Prev</button>
-                            <span>{viewPage} / {totalGridPages}</span>
-                            <button onClick={() => setViewPage(p => Math.min(totalGridPages, p + 1))} disabled={viewPage === totalGridPages} className="disabled:opacity-50 hover:text-amber-400">Next</button>
+                            {/* Global Controls */}
+                            <div>
+                                <label className="text-[10px] font-bold uppercase text-slate-500 mb-3 block tracking-wider">Global Rotation</label>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button 
+                                        onClick={() => rotateAll(-90)}
+                                        className="py-4 bg-[#1e293b] hover:bg-[#2d3b55] text-white rounded-xl font-bold text-xs uppercase tracking-wider transition-all border border-white/5 flex items-center justify-center gap-2 group"
+                                    >
+                                        <svg className="w-4 h-4 group-hover:-rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path></svg>
+                                        All Left 90°
+                                    </button>
+                                    <button 
+                                        onClick={() => rotateAll(90)}
+                                        className="py-4 bg-[#1e293b] hover:bg-[#2d3b55] text-white rounded-xl font-bold text-xs uppercase tracking-wider transition-all border border-white/5 flex items-center justify-center gap-2 group"
+                                    >
+                                        All Right 90°
+                                        <svg className="w-4 h-4 group-hover:rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 10h-10a8 8 0 00-8 8v2M21 10l-6 6m6-6l-6-6"></path></svg>
+                                    </button>
+                                </div>
+                                <button 
+                                    onClick={resetRotations}
+                                    disabled={modifiedCount === 0}
+                                    className="w-full mt-3 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-red-400 disabled:opacity-0 transition-all"
+                                >
+                                    Reset All Changes
+                                </button>
+                            </div>
+
+                            {/* Processing Status */}
+                            {status.isProcessing && (
+                                <div className="space-y-2">
+                                    <div className="flex justify-between text-[10px] font-bold uppercase text-indigo-300 tracking-wider">
+                                        <span className="animate-pulse">{status.currentStep}</span>
+                                        <span>{status.progress}%</span>
+                                    </div>
+                                    <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+                                        <div className="h-full bg-indigo-500 transition-all duration-300" style={{ width: `${status.progress}%` }}></div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Error */}
+                            {status.error && <p className="text-red-400 text-xs font-bold">{status.error}</p>}
+
+                            {/* Action Button */}
+                            {!status.isProcessing && (
+                                <button 
+                                    onClick={handleStart}
+                                    disabled={modifiedCount === 0}
+                                    className="w-full py-4 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white rounded-xl font-bold uppercase tracking-widest text-xs transition-all shadow-lg shadow-amber-900/20 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed group"
+                                >
+                                    <span>Apply Rotation</span>
+                                    <svg className="w-4 h-4 transition-transform group-hover:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                                </button>
+                            )}
+                        </>
+                    )}
+                    
+                    {!file && (
+                        <div className="text-slate-500 text-sm font-medium italic opacity-50">
+                            Select a document to begin rotating pages.
+                        </div>
+                    )}
+                </div>
+            ) : (
+                /* RESULT VIEW */
+                <div ref={resultsRef} className="flex flex-col h-full animate-fade-in space-y-6">
+                    <div className="flex-1 bg-[#1e293b] rounded-xl p-6 border border-white/5 flex flex-col justify-center items-center text-center">
+                        <div className="w-20 h-20 bg-amber-500/10 rounded-full flex items-center justify-center mb-4 border border-amber-500/20">
+                            <svg className="w-10 h-10 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                        </div>
+                        <h3 className="text-xl font-bold text-white mb-1">Rotation Saved!</h3>
+                        <p className="text-slate-400 text-xs">Your document orientation has been updated.</p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-8 border-y border-white/10 py-4 shrink-0">
+                        <div>
+                            <p className="text-[10px] font-bold uppercase text-slate-500 mb-1 tracking-wider">Original Size</p>
+                            <p className="text-xl font-mono text-slate-400">{formatBytes(status.originalSize || 0)}</p>
+                        </div>
+                        <div>
+                            <p className="text-[10px] font-bold uppercase text-slate-500 mb-1 tracking-wider">New Size</p>
+                            <p className="text-xl font-mono font-bold text-white">{formatBytes(status.compressedSize || 0)}</p>
                         </div>
                     </div>
-                )}
 
-                {/* Sticky Action Bar (Bottom) */}
-                <div className="absolute bottom-0 left-0 right-0 p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 z-20 flex justify-center">
-                    <button 
-                        onClick={handleStart}
-                        disabled={status.isProcessing}
-                        className="w-full max-w-md py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold shadow-lg shadow-amber-200 dark:shadow-none transition-all active:scale-[0.98] disabled:bg-slate-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                    >
-                        {status.isProcessing ? 'Saving Changes...' : 'Save Rotated File'}
-                    </button>
-                </div>
-            </>
-        ) : (
-            /* Result Dashboard */
-            <div ref={resultsRef} className="flex-1 flex items-center justify-center p-8 animate-fade-in-up">
-                <div className="text-center max-w-md w-full">
-                    <div className="inline-flex items-center justify-center w-24 h-24 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full mb-6 shadow-sm">
-                        <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-                    </div>
-                    <h3 className="text-3xl font-bold text-slate-800 dark:text-white mb-2">Rotation Saved!</h3>
-                    <p className="text-slate-500 dark:text-slate-400 mb-8">Your file has been updated successfully.</p>
-                    
-                    <div className="flex flex-col gap-3">
+                    <div className="flex gap-4 pt-2 shrink-0">
                         <button 
                             onClick={handleDownload}
-                            className="w-full py-4 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-lg shadow-lg shadow-amber-200 dark:shadow-none transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
+                            className="flex-1 py-4 bg-white text-[#0f172a] rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-amber-400 hover:text-white transition-colors shadow-lg flex items-center justify-center gap-2"
                         >
-                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                            Download File
+                            <span>Download</span>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                         </button>
                         <button 
-                            onClick={resetState}
-                            className="w-full py-3 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-bold border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                            onClick={() => setStatus({isProcessing:false, currentStep:'', progress:0})}
+                            className="px-6 py-4 bg-transparent border border-slate-700 text-white rounded-xl font-bold uppercase tracking-widest text-xs hover:border-white transition-colors"
                         >
-                            Start Over
+                            Back
                         </button>
                     </div>
                 </div>
-            </div>
-        )}
+            )}
+        </div>
       </div>
       
       <input ref={fileInputRef} type="file" accept=".pdf,image/*" onChange={handleFileChange} className="hidden" />
     </div>
   );
 };
-
-// --- THUMBNAIL COMPONENT ---
-const RotateThumbnail = React.memo(({ pageIndex, rotation, onRotate, pdf, imageFile }: { pageIndex: number, rotation: number, onRotate: (deg: number) => void, pdf: any, imageFile: File | null }) => {
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const [loaded, setLoaded] = useState(false);
-
-    useEffect(() => {
-        if ((!pdf && !imageFile) || loaded) return;
-
-        let active = true;
-        const render = async () => {
-            try {
-                const canvas = canvasRef.current;
-                if (!canvas) return;
-                const ctx = canvas.getContext('2d');
-                if (!ctx) return;
-
-                if (pdf) {
-                    const page = await pdf.getPage(pageIndex + 1);
-                    const viewport = page.getViewport({ scale: 0.3 }); // Small scale for speed
-                    canvas.width = viewport.width;
-                    canvas.height = viewport.height;
-                    await page.render({ canvasContext: ctx, viewport }).promise;
-                } else if (imageFile) {
-                    const img = new Image();
-                    img.src = URL.createObjectURL(imageFile);
-                    await new Promise(r => img.onload = r);
-                    const scale = 200 / Math.max(img.width, img.height);
-                    canvas.width = img.width * scale;
-                    canvas.height = img.height * scale;
-                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                }
-                
-                if (active) setLoaded(true);
-            } catch (e) {
-                console.warn("Render error", e);
-            }
-        };
-        render();
-        return () => { active = false; };
-    }, [pdf, imageFile, pageIndex, loaded]);
-
-    return (
-        <div className="flex flex-col gap-2">
-            <div 
-                onClick={() => onRotate(90)} // Tap rotates CW
-                className="relative aspect-[3/4] bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm cursor-pointer hover:border-amber-400 dark:hover:border-amber-500 transition-colors group overflow-hidden flex items-center justify-center"
-            >
-                {/* The Rotating Wrapper */}
-                <div 
-                    className="transition-transform duration-300 ease-out origin-center"
-                    style={{ transform: `rotate(${rotation}deg)` }}
-                >
-                    <canvas ref={canvasRef} className="max-w-full max-h-full block shadow-sm" />
-                </div>
-
-                {/* Overlay Controls (Desktop Hover) */}
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-                    <div className="bg-white/90 dark:bg-slate-800/90 rounded-full p-2 shadow-lg backdrop-blur">
-                        <span className="text-xl">↻</span>
-                    </div>
-                </div>
-
-                {/* Page Number */}
-                <div className="absolute top-2 left-2 bg-black/60 text-white text-[10px] font-bold px-1.5 py-0.5 rounded backdrop-blur-sm z-10 pointer-events-none">
-                    {pageIndex + 1}
-                </div>
-                
-                {/* Rotation Badge (if changed) */}
-                {rotation !== 0 && (
-                    <div className="absolute top-2 right-2 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow-sm z-10">
-                        {rotation}°
-                    </div>
-                )}
-            </div>
-            
-            {/* Mobile-Friendly Control Buttons below image */}
-            <div className="flex justify-between gap-1">
-                <button 
-                    onClick={() => onRotate(-90)} 
-                    className="flex-1 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded py-1 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600"
-                    title="Rotate Left"
-                >
-                    ↺
-                </button>
-                <button 
-                    onClick={() => onRotate(90)} 
-                    className="flex-1 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded py-1 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600"
-                    title="Rotate Right"
-                >
-                    ↻
-                </button>
-            </div>
-        </div>
-    );
-});
 
 export default RotateTool;
