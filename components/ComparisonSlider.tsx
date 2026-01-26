@@ -1,85 +1,123 @@
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 
-import React, { useState, useRef, useEffect } from 'react';
+interface ComparisonSliderProps {
+  original: string;
+  compressed: string;
+}
 
-export const ComparisonSlider = ({ original, compressed }: { original: string, compressed: string }) => {
-    const [sliderPosition, setSliderPosition] = useState(50);
-    const [isDragging, setIsDragging] = useState(false);
-    const containerRef = useRef<HTMLDivElement>(null);
-  
-    const handleMove = (clientX: number) => {
-      if (!containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      const x = clientX - rect.left;
-      const pos = Math.max(0, Math.min(100, (x / rect.width) * 100));
-      setSliderPosition(pos);
+export const ComparisonSlider: React.FC<ComparisonSliderProps> = ({ original, compressed }) => {
+  const [sliderPosition, setSliderPosition] = useState(50);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isDragging = useRef(false);
+
+  // Helper to calculate percentage based on X coordinate
+  const handleMove = useCallback((clientX: number) => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
+    const percent = Math.max(0, Math.min((x / rect.width) * 100, 100));
+    setSliderPosition(percent);
+  }, []);
+
+  // --- MOUSE EVENTS ---
+  const onMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault(); // Prevent text selection
+    isDragging.current = true;
+    handleMove(e.clientX);
+  };
+
+  // --- TOUCH EVENTS (Mobile Fix) ---
+  const onTouchStart = (e: React.TouchEvent) => {
+    // We don't preventDefault here to allow clicking, 
+    // but the CSS 'touch-action: none' handles the scrolling block.
+    isDragging.current = true;
+    handleMove(e.touches[0].clientX);
+  };
+
+  useEffect(() => {
+    // Global Listeners for dragging outside the component
+    const onMouseUp = () => { isDragging.current = false; };
+    const onMouseMove = (e: MouseEvent) => {
+      if (isDragging.current) {
+        e.preventDefault();
+        handleMove(e.clientX);
+      }
     };
-  
-    const onMouseMove = (e: React.MouseEvent) => {
-      if (isDragging) handleMove(e.clientX);
-    };
-  
-    const onTouchMove = (e: React.TouchEvent) => {
-      if (isDragging) handleMove(e.touches[0].clientX);
-    };
-  
-    const handleInteractionStart = (clientX: number) => {
-        setIsDragging(true);
-        handleMove(clientX);
+    
+    const onTouchEnd = () => { isDragging.current = false; };
+    const onTouchMove = (e: TouchEvent) => {
+      if (isDragging.current) {
+        // Critical: Prevent scrolling while dragging slider on mobile
+        if (e.cancelable) e.preventDefault(); 
+        handleMove(e.touches[0].clientX);
+      }
     };
 
-    useEffect(() => {
-        const stopDrag = () => setIsDragging(false);
-        window.addEventListener('mouseup', stopDrag);
-        window.addEventListener('touchend', stopDrag);
-        return () => {
-            window.removeEventListener('mouseup', stopDrag);
-            window.removeEventListener('touchend', stopDrag);
-        };
-    }, []);
-  
-    return (
+    // Add listeners to window to catch drags that leave the element
+    window.addEventListener('mouseup', onMouseUp);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('touchend', onTouchEnd);
+    
+    // { passive: false } is required to allow e.preventDefault() in touchmove
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+
+    return () => {
+      window.removeEventListener('mouseup', onMouseUp);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('touchmove', onTouchMove);
+    };
+  }, [handleMove]);
+
+  return (
+    <div 
+      ref={containerRef} 
+      className="relative w-full h-full select-none overflow-hidden cursor-col-resize group touch-none"
+      style={{ touchAction: 'none' }} // Explicitly disable browser handling of gestures
+      onMouseDown={onMouseDown}
+      onTouchStart={onTouchStart}
+    >
+      {/* Background Layer (Original) */}
+      <img 
+        src={original} 
+        alt="Original" 
+        className="absolute top-0 left-0 w-full h-full object-contain object-center select-none pointer-events-none" 
+        draggable={false}
+      />
+
+      {/* Label: Original */}
+      <div className="absolute top-2 left-2 bg-black/50 text-white text-[10px] font-bold px-1.5 py-0.5 rounded backdrop-blur-sm z-20 pointer-events-none">
+        Original
+      </div>
+
+      {/* Foreground Layer (Compressed) - Clipped */}
       <div 
-        ref={containerRef}
-        className="relative w-full h-full select-none group cursor-ew-resize overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm bg-slate-100 dark:bg-slate-900"
-        onMouseDown={(e) => handleInteractionStart(e.clientX)}
-        onTouchStart={(e) => handleInteractionStart(e.touches[0].clientX)}
-        onMouseMove={onMouseMove}
-        onTouchMove={onTouchMove}
+        className="absolute top-0 left-0 h-full w-full overflow-hidden select-none pointer-events-none"
+        style={{ clipPath: `inset(0 ${100 - sliderPosition}% 0 0)` }}
       >
-        {/* Compressed Image (Background) */}
         <img 
-            src={compressed} 
-            className="absolute inset-0 w-full h-full object-contain pointer-events-none select-none" 
-            alt="Compressed"
+          src={compressed} 
+          alt="Compressed" 
+          className="absolute top-0 left-0 w-full h-full object-contain object-center select-none" 
+          draggable={false}
         />
-        <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded pointer-events-none z-10">
-            COMPRESSED
-        </div>
         
-        {/* Original Image (Foreground, Clipped) */}
-        <div 
-          className="absolute inset-0 pointer-events-none select-none"
-          style={{ clipPath: `inset(0 ${100 - sliderPosition}% 0 0)` }}
-        >
-          <img 
-            src={original} 
-            className="absolute inset-0 w-full h-full object-contain" 
-            alt="Original"
-          />
-          <div className="absolute top-4 left-4 bg-indigo-600/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded z-10">
-             ORIGINAL
-          </div>
-        </div>
-  
-        {/* Slider Handle */}
-        <div 
-            className="absolute top-0 bottom-0 w-1 bg-white cursor-ew-resize shadow-[0_0_10px_rgba(0,0,0,0.5)] z-10" 
-            style={{ left: `${sliderPosition}%` }}
-        >
-          <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-8 h-8 bg-white rounded-full shadow-xl flex items-center justify-center text-slate-400 border border-slate-200">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4"></path></svg>
-          </div>
+        {/* Label: Compressed */}
+        <div className="absolute top-2 right-2 bg-green-500/80 text-white text-[10px] font-bold px-1.5 py-0.5 rounded backdrop-blur-sm z-20">
+            Compressed
         </div>
       </div>
-    );
+
+      {/* Slider Handle Line */}
+      <div 
+        className="absolute top-0 bottom-0 w-0.5 bg-white cursor-col-resize shadow-[0_0_10px_rgba(0,0,0,0.5)] z-10 pointer-events-none"
+        style={{ left: `${sliderPosition}%` }}
+      >
+        {/* Handle Button */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-white rounded-full shadow-xl flex items-center justify-center text-slate-400 text-[10px] ring-4 ring-black/10">
+          <svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4"></path></svg>
+        </div>
+      </div>
+    </div>
+  );
 };

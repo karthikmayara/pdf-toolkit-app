@@ -14,7 +14,7 @@ import UpdateNotification from './components/UpdateNotification';
 type ToolType = 'compress' | 'convert' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'numbers' | 'rotate' | 'ocr' | null;
 
 const RELEASE_NOTES = {
-  version: 'v2.9.7',
+  version: 'v2.9.8',
   notes: [
     'Fixed Smart Hybrid crash on single page docs',
     'New Resolution & Grayscale options',
