@@ -22,9 +22,6 @@ interface ContainRect {
   scale: number;
 }
 
-  useBlankPage: boolean;
-}
-
 const getInsertIndex = (insertMode: InsertPageOptions['insertMode'], insertAt: number) => {
   if (insertMode === 'before') {
     return Math.max(0, insertAt - 1);
@@ -93,15 +90,6 @@ export const insertPageIntoPDF = async (
     onProgress(60, 'Placing image...');
     const page = baseDoc.insertPage(insertIndex, [pageWidth, pageHeight]);
     page.drawImage(embeddedImage, { x, y, width, height });
-
-  const insertAt = Math.min(Math.max(options.insertAt, 1), basePageCount);
-  const insertIndex = getInsertIndex(options.insertMode, insertAt);
-
-  if (options.useBlankPage) {
-    onProgress(40, 'Creating blank page...');
-    const firstPage = baseDoc.getPage(0);
-    const { width, height } = firstPage.getSize();
-    baseDoc.insertPage(insertIndex, [width, height]);
   } else {
     if (!insertFile) {
       throw new Error('Insert PDF is missing.');
