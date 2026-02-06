@@ -47,6 +47,7 @@ This isn't just a wrapper around a library. It's a full-featured suite with a pr
 | **✍️ Digital Ink** | Sign documents with saved signatures or freehand drawing. | Coordinate mapping & vector placement. |
 | **🛡️ Watermark** | Stamp documents with text, customizable opacity & tiling. | Canvas overlay compositing. |
 | **✂️ Smart Split** | Extract specific pages or delete unwanted ranges. | Efficient byte-range extraction. |
+| **➕ Insert Page** | Insert pages from PDFs, JPGs, or PNGs with device-aware limits. | Page copy + image embedding with smart fit. |
 | **📉 Image Optimizer** | Compress JPG/PNG/WebP images for the web. | Browser-native encoding API. |
 | **🔢 Pagination** | Add customizable page numbers to existing docs. | Dynamic font embedding. |
 
