@@ -16,12 +16,12 @@ import UpdateNotification from './components/UpdateNotification';
 type ToolType = 'compress' | 'convert' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'insert' | 'numbers' | 'rotate' | 'ocr' | null;
 
 const RELEASE_NOTES = {
-  version: 'v2.10.7',
+  version: 'v2.10.8',
   notes: [
-    '🔧 Fixed Smart Hybrid crash on single page docs',
-    '🚀 Advanced Compression Controls',
-    'New Resolution & Grayscale options',
-    'Enhanced Lossless Deduplication'
+    '➕ New Insert Page tool with PDF & image support',
+    '📷 JPG/PNG insert with device-aware size limits',
+    '⚡️ Faster offline updates via cache refresh',
+    '🛠️ Stability improvements across PDF tools'
   ]
 };
 
