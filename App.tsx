@@ -7,12 +7,13 @@ import ImageOptimizerTool from './components/ImageOptimizerTool';
 import SignTool from './components/SignTool';
 import WatermarkTool from './components/WatermarkTool';
 import SplitTool from './components/SplitTool';
+import InsertPageTool from './components/InsertPageTool';
 import PageNumberTool from './components/PageNumberTool';
 import RotateTool from './components/RotateTool';
 import OCRTool from './components/OCRTool';
 import UpdateNotification from './components/UpdateNotification';
 
-type ToolType = 'compress' | 'convert' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'numbers' | 'rotate' | 'ocr' | null;
+type ToolType = 'compress' | 'convert' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'insert' | 'numbers' | 'rotate' | 'ocr' | null;
 
 const RELEASE_NOTES = {
   version: 'v2.9.6',
@@ -29,6 +30,7 @@ const getToolDetails = (id: ToolType) => {
     case 'compress': return { name: 'Compress PDF', icon: '📦', desc: 'Smart reduction' };
     case 'merge': return { name: 'Merge PDFs', icon: '📑', desc: 'Combine files' };
     case 'split': return { name: 'Split PDF', icon: '✂️', desc: 'Extract pages' };
+    case 'insert': return { name: 'Insert Page', icon: '➕', desc: 'Add a page' };
     case 'convert': return { name: 'Image Converter', icon: '🔄', desc: 'PDF ↔ IMG' };
     case 'sign': return { name: 'Sign PDF', icon: '✍️', desc: 'Digital signature' };
     case 'ocr': return { name: 'Image OCR', icon: '🔍', desc: 'Extract text' };
@@ -310,13 +312,14 @@ export default function App() {
                     <ToolCard title="Compress PDF" desc="Smart Reduction" icon="📦" onClick={() => navigateToTool('compress')} delayClass="delay-[50ms]" />
                     <ToolCard title="Merge PDFs" desc="Combine Files" icon="📑" onClick={() => navigateToTool('merge')} delayClass="delay-[100ms]" />
                     <ToolCard title="Split PDF" desc="Extract Pages" icon="✂️" onClick={() => navigateToTool('split')} delayClass="delay-[150ms]" />
-                    <ToolCard title="Convert Images" desc="PDF ↔ IMG" icon="🔄" onClick={() => navigateToTool('convert')} delayClass="delay-[200ms]" />
-                    <ToolCard title="Sign PDF" desc="Digital Ink" icon="✍️" onClick={() => navigateToTool('sign')} delayClass="delay-[250ms]" />
-                    <ToolCard title="Image OCR" desc="Text Extract" icon="🔍" onClick={() => navigateToTool('ocr')} delayClass="delay-[300ms]" />
-                    <ToolCard title="Watermark" desc="Stamp & Protect" icon="🛡️" onClick={() => navigateToTool('watermark')} delayClass="delay-[350ms]" />
-                    <ToolCard title="Optimize Image" desc="Web Ready" icon="📉" onClick={() => navigateToTool('optimize')} delayClass="delay-[400ms]" />
-                    <ToolCard title="Page Numbers" desc="Pagination" icon="🔢" onClick={() => navigateToTool('numbers')} delayClass="delay-[450ms]" />
-                    <ToolCard title="Rotate" desc="Orientation" icon="↻" onClick={() => navigateToTool('rotate')} delayClass="delay-[500ms]" />
+                    <ToolCard title="Insert Page" desc="Add Page" icon="➕" onClick={() => navigateToTool('insert')} delayClass="delay-[200ms]" />
+                    <ToolCard title="Convert Images" desc="PDF ↔ IMG" icon="🔄" onClick={() => navigateToTool('convert')} delayClass="delay-[250ms]" />
+                    <ToolCard title="Sign PDF" desc="Digital Ink" icon="✍️" onClick={() => navigateToTool('sign')} delayClass="delay-[300ms]" />
+                    <ToolCard title="Image OCR" desc="Text Extract" icon="🔍" onClick={() => navigateToTool('ocr')} delayClass="delay-[350ms]" />
+                    <ToolCard title="Watermark" desc="Stamp & Protect" icon="🛡️" onClick={() => navigateToTool('watermark')} delayClass="delay-[400ms]" />
+                    <ToolCard title="Optimize Image" desc="Web Ready" icon="📉" onClick={() => navigateToTool('optimize')} delayClass="delay-[450ms]" />
+                    <ToolCard title="Page Numbers" desc="Pagination" icon="🔢" onClick={() => navigateToTool('numbers')} delayClass="delay-[500ms]" />
+                    <ToolCard title="Rotate" desc="Orientation" icon="↻" onClick={() => navigateToTool('rotate')} delayClass="delay-[550ms]" />
                 </div>
             </div>
           </>
@@ -337,6 +340,7 @@ export default function App() {
             {activeTool === 'sign' && <SignTool />}
             {activeTool === 'watermark' && <WatermarkTool />}
             {activeTool === 'split' && <SplitTool />}
+            {activeTool === 'insert' && <InsertPageTool />}
             {activeTool === 'numbers' && <PageNumberTool />}
             {activeTool === 'rotate' && <RotateTool />}
             {activeTool === 'ocr' && <OCRTool />}
