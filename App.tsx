@@ -16,7 +16,7 @@ import UpdateNotification from './components/UpdateNotification';
 type ToolType = 'compress' | 'convert' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'insert' | 'numbers' | 'rotate' | 'ocr' | null;
 
 const RELEASE_NOTES = {
-  version: 'v2.10.7',
+  version: 'v2.10.8',
   notes: [
     '➕ New Insert Page tool with PDF & image support',
     '📷 JPG/PNG insert with device-aware size limits',
