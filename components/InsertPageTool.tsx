@@ -141,6 +141,44 @@ const InsertPageTool: React.FC = () => {
 
   const imageLimitBytes = useMemo(() => getInsertImageLimitBytes(isMobile), [isMobile]);
   const imageLimitLabel = useMemo(() => Math.round(imageLimitBytes / (1024 * 1024)), [imageLimitBytes]);
+  const imageLimitCopy = useMemo(() => `Max ${imageLimitLabel} MB on this device`, [imageLimitLabel]);
+
+  const insertValidationError = useMemo(() => {
+    if (!baseFile) return 'Please upload a base PDF.';
+    if (!settings.useBlankPage && !insertFile) {
+      return 'Please upload a PDF or image to insert, or use a blank page.';
+    }
+    if (settings.sourceType === 'image' && insertFile) {
+      if (!IMAGE_TYPES.includes(insertFile.type)) {
+        return 'Only JPG and PNG images are supported.';
+      }
+      if (insertFile.size > imageLimitBytes) {
+        return `Image exceeds ${imageLimitLabel} MB limit on this device.`;
+      }
+    }
+    if (basePageCount === 0) return 'Unable to read base PDF pages.';
+    if (settings.insertAt < 1 || settings.insertAt > basePageCount) {
+      return `Insert position must be between 1 and ${basePageCount}.`;
+    }
+    if (settings.sourceType === 'pdf' && !settings.useBlankPage) {
+      if (insertPageCount === 0) return 'Unable to read insert PDF pages.';
+      if (settings.sourcePage < 1 || settings.sourcePage > insertPageCount) {
+        return `Source page must be between 1 and ${insertPageCount}.`;
+      }
+    }
+    return null;
+  }, [
+    baseFile,
+    basePageCount,
+    imageLimitBytes,
+    imageLimitLabel,
+    insertFile,
+    insertPageCount,
+    settings.insertAt,
+    settings.sourcePage,
+    settings.sourceType,
+    settings.useBlankPage
+  ]);
 
   const handleInsertChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -209,28 +247,8 @@ const InsertPageTool: React.FC = () => {
   };
 
   const handleStart = async () => {
-    if (!baseFile) {
-      setStatus(prev => ({ ...prev, error: 'Please upload a base PDF.' }));
-      return;
-    }
-    if (!settings.useBlankPage && !insertFile) {
-      setStatus(prev => ({ ...prev, error: 'Please upload a PDF or image to insert, or use a blank page.' }));
-      return;
-    }
-    if (settings.sourceType === 'image' && insertFile && insertFile.size > imageLimitBytes) {
-      setStatus(prev => ({ ...prev, error: `Image exceeds ${imageLimitLabel} MB limit on this device.` }));
-      return;
-    }
-    if (basePageCount === 0) {
-      setStatus(prev => ({ ...prev, error: 'Unable to read base PDF pages.' }));
-      return;
-    }
-    if (settings.insertAt < 1 || settings.insertAt > basePageCount) {
-      setStatus(prev => ({ ...prev, error: `Insert position must be between 1 and ${basePageCount}.` }));
-      return;
-    }
-    if (settings.sourceType === 'pdf' && !settings.useBlankPage && (settings.sourcePage < 1 || settings.sourcePage > insertPageCount)) {
-      setStatus(prev => ({ ...prev, error: `Source page must be between 1 and ${insertPageCount}.` }));
+    if (insertValidationError) {
+      setStatus(prev => ({ ...prev, error: insertValidationError }));
       return;
     }
 
@@ -274,15 +292,14 @@ const InsertPageTool: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  const insertReady = !!baseFile && (settings.useBlankPage || !!insertFile);
-  const canInsert =
-    insertReady &&
-    basePageCount > 0 &&
-    settings.insertAt >= 1 &&
-    settings.insertAt <= basePageCount &&
-    (settings.useBlankPage ||
-      settings.sourceType === 'image' ||
-      (insertPageCount > 0 && settings.sourcePage >= 1 && settings.sourcePage <= insertPageCount));
+  const canInsert = !insertValidationError;
+  const resultTitle = settings.sourceType === 'image' ? 'Image Inserted' : settings.useBlankPage ? 'Blank Page Added' : 'Insert Complete';
+  const resultDescription =
+    settings.sourceType === 'image'
+      ? 'Your image has been inserted into the document.'
+      : settings.useBlankPage
+        ? 'A new blank page has been inserted into your document.'
+        : 'Your updated document has been created successfully.';
 
   return (
     <div className="max-w-7xl mx-auto animate-fade-in pb-12 px-4 sm:px-6">
@@ -370,7 +387,7 @@ const InsertPageTool: React.FC = () => {
                       <span className="text-2xl">➕</span>
                     </div>
                     <p className="text-sm font-semibold text-white">Upload Insert File</p>
-                    <p className="text-xs text-slate-400 mt-1">PDF, JPG, PNG supported.</p>
+                    <p className="text-xs text-slate-400 mt-1">PDF or JPG/PNG only.</p>
                   </div>
                 )}
 
@@ -381,9 +398,7 @@ const InsertPageTool: React.FC = () => {
                   >
                     {insertFile ? 'Replace Insert File' : 'Upload Insert File'}
                   </button>
-                  <p className="text-[10px] text-slate-500 text-center">
-                    JPG/PNG max {imageLimitLabel} MB on this device.
-                  </p>
+                  <p className="text-[10px] text-slate-500 text-center">JPG/PNG only • {imageLimitCopy}</p>
                   <label className="flex items-center justify-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-300">
                     <input
                       type="checkbox"
@@ -559,8 +574,8 @@ const InsertPageTool: React.FC = () => {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                   </svg>
                 </div>
-                <h3 className="text-xl font-bold text-white mb-1">Insert Complete</h3>
-                <p className="text-slate-400 text-xs">Your updated document has been created successfully.</p>
+                <h3 className="text-xl font-bold text-white mb-1">{resultTitle}</h3>
+                <p className="text-slate-400 text-xs">{resultDescription}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-8 border-y border-white/10 py-4 shrink-0">
