@@ -67,6 +67,15 @@ export interface SplitSettings {
   selectedPages: Set<number>; // 0-based indices
 }
 
+// Insert Page Types
+export interface InsertSettings {
+  insertMode: 'before' | 'after';
+  insertAt: number; // 1-based page number in base PDF
+  sourcePage: number; // 1-based page number in insert PDF
+  sourceType: 'pdf' | 'image' | 'blank';
+  useBlankPage: boolean;
+}
+
 // Page Number Types
 export type PageNumberPosition = 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
 
