@@ -72,6 +72,7 @@ export interface InsertSettings {
   insertMode: 'before' | 'after';
   insertAt: number; // 1-based page number in base PDF
   sourcePage: number; // 1-based page number in insert PDF
+  sourceType: 'pdf' | 'image' | 'blank';
   useBlankPage: boolean;
 }
 
