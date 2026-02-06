@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { InsertSettings, ProcessStatus } from '../types';
 import { insertPageIntoPDF } from '../services/pdfInsert';
 
@@ -63,6 +64,7 @@ const InsertPageTool: React.FC = () => {
 
   useEffect(() => {
     if (!insertFile || settings.sourceType !== 'pdf') {
+    if (!insertFile) {
       setInsertPageCount(0);
       return;
     }
@@ -85,6 +87,7 @@ const InsertPageTool: React.FC = () => {
       }
     };
   }, []);
+  }, [insertFile]);
 
   useEffect(() => {
     if (basePageCount > 0) {
@@ -168,6 +171,11 @@ const InsertPageTool: React.FC = () => {
         sourceType: isPdf ? 'pdf' : 'image'
       }));
       setStatus({ isProcessing: false, currentStep: '', progress: 0, error: undefined });
+  const handleInsertChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setInsertFile(e.target.files[0]);
+      setSettings(prev => ({ ...prev, useBlankPage: false, sourcePage: 1 }));
+      setStatus({ isProcessing: false, currentStep: '', progress: 0 });
     }
     if (insertInputRef.current) insertInputRef.current.value = '';
   };
@@ -205,6 +213,10 @@ const InsertPageTool: React.FC = () => {
         sourceType: isPdf ? 'pdf' : 'image'
       }));
       setStatus({ isProcessing: false, currentStep: '', progress: 0, error: undefined });
+    if (e.dataTransfer.files && e.dataTransfer.files[0]?.type === 'application/pdf') {
+      setInsertFile(e.dataTransfer.files[0]);
+      setSettings(prev => ({ ...prev, useBlankPage: false, sourcePage: 1 }));
+      setStatus({ isProcessing: false, currentStep: '', progress: 0 });
     }
   };
 
@@ -219,6 +231,7 @@ const InsertPageTool: React.FC = () => {
     }
     if (settings.sourceType === 'image' && insertFile && insertFile.size > imageLimitBytes) {
       setStatus(prev => ({ ...prev, error: `Image exceeds ${imageLimitLabel} MB limit on this device.` }));
+      setStatus(prev => ({ ...prev, error: 'Please upload a PDF to insert or use a blank page.' }));
       return;
     }
     if (basePageCount === 0) {
@@ -230,6 +243,7 @@ const InsertPageTool: React.FC = () => {
       return;
     }
     if (settings.sourceType === 'pdf' && !settings.useBlankPage && (settings.sourcePage < 1 || settings.sourcePage > insertPageCount)) {
+    if (!settings.useBlankPage && (settings.sourcePage < 1 || settings.sourcePage > insertPageCount)) {
       setStatus(prev => ({ ...prev, error: `Source page must be between 1 and ${insertPageCount}.` }));
       return;
     }
@@ -283,6 +297,7 @@ const InsertPageTool: React.FC = () => {
     (settings.useBlankPage ||
       settings.sourceType === 'image' ||
       (insertPageCount > 0 && settings.sourcePage >= 1 && settings.sourcePage <= insertPageCount));
+    (settings.useBlankPage || (insertPageCount > 0 && settings.sourcePage >= 1 && settings.sourcePage <= insertPageCount));
 
   return (
     <div className="max-w-7xl mx-auto animate-fade-in pb-12 px-4 sm:px-6">
@@ -361,6 +376,7 @@ const InsertPageTool: React.FC = () => {
                       ) : (
                         <span>Image</span>
                       )}
+                      <span>{insertPageCount || '...'} pages</span>
                       <span>{formatBytes(insertFile.size)}</span>
                     </div>
                   </>
@@ -371,6 +387,8 @@ const InsertPageTool: React.FC = () => {
                     </div>
                     <p className="text-sm font-semibold text-white">Upload Insert File</p>
                     <p className="text-xs text-slate-400 mt-1">PDF, JPG, PNG supported.</p>
+                    <p className="text-sm font-semibold text-white">Upload Insert PDF</p>
+                    <p className="text-xs text-slate-400 mt-1">Drag & drop or click to choose.</p>
                   </div>
                 )}
 
@@ -384,6 +402,8 @@ const InsertPageTool: React.FC = () => {
                   <p className="text-[10px] text-slate-500 text-center">
                     JPG/PNG max {imageLimitLabel} MB on this device.
                   </p>
+                    {insertFile ? 'Replace Insert PDF' : 'Upload Insert PDF'}
+                  </button>
                   <label className="flex items-center justify-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-300">
                     <input
                       type="checkbox"
@@ -400,6 +420,7 @@ const InsertPageTool: React.FC = () => {
                           useBlankPage,
                           sourceType: nextSourceType
                         }));
+                        setSettings(prev => ({ ...prev, useBlankPage }));
                         if (useBlankPage) {
                           setInsertFile(null);
                           setInsertPageCount(0);
@@ -441,6 +462,7 @@ const InsertPageTool: React.FC = () => {
                       <p className="text-[10px] font-bold uppercase text-slate-500 mb-1 tracking-wider">Insert Pages</p>
                       <p className="text-2xl font-mono font-bold text-indigo-400">
                         {settings.useBlankPage ? 'Blank' : settings.sourceType === 'image' ? 'Image' : insertPageCount || '...'}
+                        {settings.useBlankPage ? 'Blank' : insertPageCount || '...'}
                       </p>
                     </div>
                   </div>
@@ -505,6 +527,11 @@ const InsertPageTool: React.FC = () => {
                             : settings.sourceType === 'image'
                               ? 'Image will be fit to the page.'
                               : 'Select a page from the insert PDF.'}
+                          disabled={settings.useBlankPage}
+                          className="mt-2 w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white font-mono text-sm focus:outline-none focus:border-indigo-500 transition-colors disabled:opacity-50"
+                        />
+                        <p className="text-[10px] text-slate-500 mt-2">
+                          {settings.useBlankPage ? 'Using a blank page.' : 'Select a page from the insert PDF.'}
                         </p>
                       </div>
                     </div>
@@ -604,6 +631,7 @@ const InsertPageTool: React.FC = () => {
 
       <input ref={baseInputRef} type="file" accept=".pdf" onChange={handleBaseChange} className="hidden" />
       <input ref={insertInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={handleInsertChange} className="hidden" />
+      <input ref={insertInputRef} type="file" accept=".pdf" onChange={handleInsertChange} className="hidden" />
     </div>
   );
 };
