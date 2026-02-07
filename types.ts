@@ -5,6 +5,7 @@ declare global {
     PDFLib: any;
     JSZip: any;
     Tesseract: any;
+    fflate: any;
   }
 }
 
@@ -23,6 +24,9 @@ export interface CompressionSettings {
   autoDetectText?: boolean; // Phase 2: Hybrid Compression (Skip rasterization for text pages)
   cleanBackground?: boolean; // New: Force near-white pixels to pure white
   enableOCR?: boolean; // New: Inject invisible text layer
+  largePdfMode?: boolean; // Lower analysis depth for large PDFs
+  analysisBatchSize?: number; // Yield to UI every N pages
+  analysisTimeoutMs?: number; // Cap analysis time per page
 }
 
 export interface ProcessStatus {

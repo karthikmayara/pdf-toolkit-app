@@ -2,12 +2,23 @@
 const APP_VERSION = 'v2.10.9';
 const CACHE_NAME = `pdf-toolkit-${APP_VERSION}`;
 
-// STRICT: Only cache LOCAL files during install.
-// Do NOT put CDNs here. They cause CORS errors that kill the installation.
+// Cache local shell files during install.
+// CDN assets are cached opportunistically with error handling to avoid install failures.
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
-  './manifest.json'
+  './manifest.json',
+  './icon.svg'
+];
+
+const CRITICAL_CDN_ASSETS = [
+  'https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',
+  'https://unpkg.com/fflate@0.8.2/umd/index.js',
+  'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js',
+  'https://cdn.tailwindcss.com'
 ];
 
 self.addEventListener('install', (event) => {
@@ -17,8 +28,9 @@ self.addEventListener('install', (event) => {
       // We use Promise.allSettled or individual catches to ensure that if one file 
       // (like a missing icon) fails, it doesn't crash the entire Service Worker installation.
       return Promise.all(
-        ASSETS_TO_CACHE.map(url => {
-          return cache.add(url).catch(err => {
+        [...ASSETS_TO_CACHE, ...CRITICAL_CDN_ASSETS].map(url => {
+          const request = url.startsWith('http') ? new Request(url, { mode: 'no-cors' }) : url;
+          return cache.add(request).catch(err => {
             console.warn(`Failed to cache ${url} during install:`, err);
           });
         })
