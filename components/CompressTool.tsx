@@ -35,6 +35,8 @@ const CompressTool: React.FC = () => {
   // Advanced Settings for Force Image
   const [cleanBackground, setCleanBackground] = useState(true);
   const [enableOCR, setEnableOCR] = useState(false);
+  const [largePdfMode, setLargePdfMode] = useState(false);
+  const [performanceMode, setPerformanceMode] = useState(false);
   
   // Derived Settings for the Service
   const settings: CompressionSettings = {
@@ -47,6 +49,10 @@ const CompressTool: React.FC = () => {
     autoDetectText: uiMode === 'hybrid',
     cleanBackground: uiMode === 'image' ? cleanBackground : false,
     enableOCR: uiMode === 'image' ? enableOCR : false,
+    largePdfMode: uiMode === 'hybrid' ? largePdfMode : false,
+    performanceMode: uiMode === 'hybrid' ? performanceMode : false,
+    analysisBatchSize: largePdfMode ? 2 : 3,
+    analysisTimeoutMs: largePdfMode ? 250 : 800,
   };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -156,6 +162,8 @@ const CompressTool: React.FC = () => {
     setGrayscale(false);
     setCleanBackground(true);
     setEnableOCR(false);
+    setLargePdfMode(false);
+    setPerformanceMode(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -376,6 +384,43 @@ const CompressTool: React.FC = () => {
                                                 <span>Better Look</span>
                                             </div>
                                         </div>
+                                        
+                                        {uiMode === 'hybrid' && (
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-fade-in">
+                                                <div className="bg-white/5 rounded-xl p-4 border border-white/10 flex items-center justify-between">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[10px] uppercase font-bold text-slate-400">Large PDF Mode</span>
+                                                        <span className="text-[9px] text-slate-600">Lightweight analysis for huge files</span>
+                                                    </div>
+                                                    <label className="relative inline-flex items-center cursor-pointer">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={largePdfMode} 
+                                                            disabled={status.isProcessing}
+                                                            onChange={(e) => setLargePdfMode(e.target.checked)} 
+                                                            className="sr-only peer" 
+                                                        />
+                                                        <div className="w-10 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-cyan-500"></div>
+                                                    </label>
+                                                </div>
+                                                <div className="bg-white/5 rounded-xl p-4 border border-white/10 flex items-center justify-between">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[10px] uppercase font-bold text-slate-400">Performance Mode</span>
+                                                        <span className="text-[9px] text-slate-600">Smoother UI on slower devices</span>
+                                                    </div>
+                                                    <label className="relative inline-flex items-center cursor-pointer">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={performanceMode} 
+                                                            disabled={status.isProcessing}
+                                                            onChange={(e) => setPerformanceMode(e.target.checked)} 
+                                                            className="sr-only peer" 
+                                                        />
+                                                        <div className="w-10 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-cyan-500"></div>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        )}
 
                                         {/* Force Image Specific Controls */}
                                         {uiMode === 'image' && (

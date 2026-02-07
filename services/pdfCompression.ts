@@ -89,6 +89,82 @@ const deduplicateAssets = async (pdfDoc: any, onProgress: (p: number, s: string)
     }
 };
 
+type TimedResult<T> = {
+  timedOut: boolean;
+  value?: T;
+};
+
+const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number): Promise<TimedResult<T>> => {
+  let timeoutId: number | undefined;
+  const timeoutPromise = new Promise<TimedResult<T>>((resolve) => {
+    timeoutId = window.setTimeout(() => resolve({ timedOut: true }), timeoutMs);
+  });
+
+  const result = await Promise.race([
+    promise.then((value) => ({ timedOut: false, value })),
+    timeoutPromise
+  ]);
+
+  if (timeoutId) window.clearTimeout(timeoutId);
+  return result;
+};
+
+const analyzePageContent = async (
+  page: any,
+  pdfjs: any,
+  opts: { timeoutMs: number; runOpList: boolean }
+) => {
+  const { timeoutMs, runOpList } = opts;
+  let textLen = 0;
+  let textItems = 0;
+  let vectorOps = 0;
+  let imageOps = 0;
+  let analysisTimedOut = false;
+
+  const textResult = await withTimeout(page.getTextContent(), timeoutMs);
+  if (textResult.timedOut) {
+    analysisTimedOut = true;
+  } else if (textResult.value) {
+    textItems = textResult.value.items.length;
+    textLen = textResult.value.items.reduce((acc: number, item: any) => acc + (item.str || '').length, 0);
+  }
+
+  if (runOpList) {
+    const opResult = await withTimeout(page.getOperatorList(), timeoutMs);
+    if (opResult.timedOut) {
+      analysisTimedOut = true;
+    } else if (opResult.value) {
+      const fnArray = opResult.value.fnArray || opResult.value.fn || [];
+      const OPS = pdfjs.OPS;
+      const drawingCmds = new Set([
+        OPS.moveTo, OPS.lineTo, OPS.curveTo, OPS.curveTo2, OPS.curveTo3,
+        OPS.rectangle, OPS.stroke, OPS.fill, OPS.eoFill
+      ]);
+      const imageCmds = new Set([
+        OPS.paintImageXObject, OPS.paintInlineImageXObject, OPS.paintImageMaskXObject
+      ]);
+
+      for (let k = 0; k < fnArray.length; k++) {
+        const fn = fnArray[k];
+        if (drawingCmds.has(fn)) vectorOps++;
+        if (imageCmds.has(fn)) imageOps++;
+      }
+    }
+  }
+
+  return { textLen, textItems, vectorOps, imageOps, analysisTimedOut };
+};
+
+const yieldToMain = async (useIdle: boolean) => {
+  if (useIdle && 'requestIdleCallback' in window) {
+    await new Promise<void>((resolve) => {
+      (window as any).requestIdleCallback(() => resolve(), { timeout: 50 });
+    });
+    return;
+  }
+  await new Promise(r => setTimeout(r, 0));
+};
+
 /**
  * Main Compression Function
  */
@@ -203,10 +279,15 @@ export const compressPDF = async (
       }
 
       loadingTask = pdfjs.getDocument(fileUrl);
-      const pdf = await loadingTask.promise;
-      const totalPages = pdf.numPages;
+    const pdf = await loadingTask.promise;
+    const totalPages = pdf.numPages;
+    const largePdfMode = settings.largePdfMode ?? false;
+    const performanceMode = settings.performanceMode ?? false;
+    const analysisTimeoutMs = settings.analysisTimeoutMs ?? (largePdfMode ? 250 : 800);
+    const analysisBatchSize = settings.analysisBatchSize ?? (largePdfMode ? 2 : 3);
+    const yieldEvery = performanceMode ? 1 : analysisBatchSize;
 
-      const newPdfDoc = await PDFDocument.create();
+    const newPdfDoc = await PDFDocument.create();
       
       // Pre-embed invisible font for OCR
       let ocrFont: any;
@@ -245,34 +326,15 @@ export const compressPDF = async (
         try {
             page = await pdf.getPage(i);
             
-            // Text Density Analysis (Used for both Smart Hybrid & Adaptive Resolution)
-            const textContent = await page.getTextContent();
-            const textLen = textContent.items.reduce((acc: number, item: any) => acc + (item.str || '').length, 0);
+            const runOpList = !largePdfMode || i % 3 === 0;
+            const { textLen, textItems, vectorOps, imageOps, analysisTimedOut } = await analyzePageContent(page, pdfjs, {
+                timeoutMs: analysisTimeoutMs,
+                runOpList
+            });
 
             // PHASE 2: Smart Hybrid Detection
             if (settings.autoDetectText) {
                 try {
-                    const opList = await page.getOperatorList();
-                    const fnArray = (opList && opList.fn) ? opList.fn : [];
-                    
-                    let vectorOps = 0;
-                    let imageOps = 0;
-                    
-                    const OPS = pdfjs.OPS;
-                    const drawingCmds = new Set([
-                        OPS.moveTo, OPS.lineTo, OPS.curveTo, OPS.curveTo2, OPS.curveTo3,
-                        OPS.rectangle, OPS.stroke, OPS.fill, OPS.eoFill
-                    ]);
-                    const imageCmds = new Set([
-                        OPS.paintImageXObject, OPS.paintInlineImageXObject, OPS.paintImageMaskXObject
-                    ]);
-
-                    for(let k=0; k < fnArray.length; k++) {
-                        const fn = fnArray[k];
-                        if (drawingCmds.has(fn)) vectorOps++;
-                        if (imageCmds.has(fn)) imageOps++;
-                    }
-
                     // Scoring Algorithm
                     let score = 0;
                     if (textLen > 300) score += 50;      
@@ -283,9 +345,13 @@ export const compressPDF = async (
                     if (imageOps === 0) {
                         score += 200; 
                     } else {
+                        score -= Math.min(imageOps, 10) * 12;
                         if (textLen > 100 && vectorOps < 5) score -= 60; 
                         if (textLen < 50 && vectorOps < 10) score -= 100;
+                        if (textItems > 80 && imageOps < 2) score += 30;
+                        if (textItems < 10 && imageOps > 2) score -= 80;
                     }
+                    if (analysisTimedOut && largePdfMode) score += 10;
                     preservePage = score > 0;
 
                 } catch (detectionError) {
@@ -315,6 +381,9 @@ export const compressPDF = async (
                 
                 // FEATURE 2: Adaptive Resolution (Smart Scaling)
                 let targetMaxDim = settings.maxResolution || 2000;
+                if (performanceMode) {
+                    targetMaxDim = Math.min(targetMaxDim, 1800);
+                }
                 
                 if (textLen > 1000) {
                     targetMaxDim = Math.max(targetMaxDim, 2500); 
@@ -433,11 +502,17 @@ export const compressPDF = async (
              if (page && page.cleanup) page.cleanup();
         }
 
-        if (i % 3 === 0) await new Promise(r => setTimeout(r, 10));
+        if (i % yieldEvery === 0) await yieldToMain(performanceMode);
       }
 
       onProgress(95, 'Finalizing PDF...');
-      const pdfBytes = await newPdfDoc.save();
+      if (settings.autoDetectText) {
+        await deduplicateAssets(newPdfDoc, onProgress);
+      }
+      const pdfBytes = await newPdfDoc.save({
+        useObjectStreams: true,
+        objectsPerTick: 50
+      });
       
       onProgress(100, 'Done');
       return new Blob([pdfBytes], { type: 'application/pdf' });
