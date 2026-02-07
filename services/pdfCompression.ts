@@ -155,6 +155,16 @@ const analyzePageContent = async (
   return { textLen, textItems, vectorOps, imageOps, analysisTimedOut };
 };
 
+const yieldToMain = async (useIdle: boolean) => {
+  if (useIdle && 'requestIdleCallback' in window) {
+    await new Promise<void>((resolve) => {
+      (window as any).requestIdleCallback(() => resolve(), { timeout: 50 });
+    });
+    return;
+  }
+  await new Promise(r => setTimeout(r, 0));
+};
+
 /**
  * Main Compression Function
  */
@@ -272,8 +282,10 @@ export const compressPDF = async (
     const pdf = await loadingTask.promise;
     const totalPages = pdf.numPages;
     const largePdfMode = settings.largePdfMode ?? false;
+    const performanceMode = settings.performanceMode ?? false;
     const analysisTimeoutMs = settings.analysisTimeoutMs ?? (largePdfMode ? 250 : 800);
     const analysisBatchSize = settings.analysisBatchSize ?? (largePdfMode ? 2 : 3);
+    const yieldEvery = performanceMode ? 1 : analysisBatchSize;
 
     const newPdfDoc = await PDFDocument.create();
       
@@ -369,6 +381,9 @@ export const compressPDF = async (
                 
                 // FEATURE 2: Adaptive Resolution (Smart Scaling)
                 let targetMaxDim = settings.maxResolution || 2000;
+                if (performanceMode) {
+                    targetMaxDim = Math.min(targetMaxDim, 1800);
+                }
                 
                 if (textLen > 1000) {
                     targetMaxDim = Math.max(targetMaxDim, 2500); 
@@ -487,11 +502,17 @@ export const compressPDF = async (
              if (page && page.cleanup) page.cleanup();
         }
 
-        if (i % analysisBatchSize === 0) await new Promise(r => setTimeout(r, 10));
+        if (i % yieldEvery === 0) await yieldToMain(performanceMode);
       }
 
       onProgress(95, 'Finalizing PDF...');
-      const pdfBytes = await newPdfDoc.save();
+      if (settings.autoDetectText) {
+        await deduplicateAssets(newPdfDoc, onProgress);
+      }
+      const pdfBytes = await newPdfDoc.save({
+        useObjectStreams: true,
+        objectsPerTick: 50
+      });
       
       onProgress(100, 'Done');
       return new Blob([pdfBytes], { type: 'application/pdf' });
