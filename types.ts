@@ -27,6 +27,7 @@ export interface CompressionSettings {
   largePdfMode?: boolean; // Lower analysis depth for large PDFs
   analysisBatchSize?: number; // Yield to UI every N pages
   analysisTimeoutMs?: number; // Cap analysis time per page
+  performanceMode?: boolean; // Reduce work per tick for better responsiveness
 }
 
 export interface ProcessStatus {
