@@ -16,7 +16,7 @@ import UpdateNotification from './components/UpdateNotification';
 type ToolType = 'compress' | 'convert' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'insert' | 'numbers' | 'rotate' | 'ocr' | null;
 
 const RELEASE_NOTES = {
-  version: 'v2.10.9',
+  version: 'v3.0.0',
   notes: [
     '🧩 Insert Page now supports JPG/PNG with device-specific size limits',
     '✅ Clearer validation for insert sources and file types',
