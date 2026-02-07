@@ -1,5 +1,5 @@
 // Increment this version string to force an update on user devices
-const APP_VERSION = 'v3.0.0';
+const APP_VERSION = 'v3.0.1';
 const CACHE_NAME = `pdf-toolkit-${APP_VERSION}`;
 
 // Cache local shell files during install.
