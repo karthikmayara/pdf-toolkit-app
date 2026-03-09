@@ -6,6 +6,10 @@ declare global {
     JSZip: any;
     Tesseract: any;
     fflate: any;
+    docx: any;
+    XLSX: any;
+    PptxGenJS: any;
+    mammoth: any;
   }
 }
 
