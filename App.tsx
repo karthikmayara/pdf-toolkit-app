@@ -17,12 +17,9 @@ import UpdateNotification from './components/UpdateNotification';
 type ToolType = 'compress' | 'convert' | 'documents' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'insert' | 'numbers' | 'rotate' | 'ocr' | null;
 
 const RELEASE_NOTES = {
-  version: 'v3.0.1',
+  version: 'v3.0.4',
   notes: [
-    '🧩 Insert Page now supports JPG/PNG with device-specific size limits',
-    '✅ Clearer validation for insert sources and file types',
-    '📣 Updated Insert Page success messaging for images and blanks',
-    '⚡️ Faster offline updates via cache refresh'
+    'Add Office ↔ PDF Document Converter with worker-based processing',
   ]
 };
 
