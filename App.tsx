@@ -17,9 +17,9 @@ import UpdateNotification from './components/UpdateNotification';
 type ToolType = 'compress' | 'convert' | 'documents' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'insert' | 'numbers' | 'rotate' | 'ocr' | null;
 
 const RELEASE_NOTES = {
-  version: 'v3.0.2',
+  version: 'v3.0.3',
   notes: [
-    'added pdf to powerpoint/excel/word conversion',
+    'corrected the UI for pdf to powerpoint/excel/word conversion',
   ]
 };
 
