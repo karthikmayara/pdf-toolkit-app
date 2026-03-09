@@ -11,9 +11,10 @@ import InsertPageTool from './components/InsertPageTool';
 import PageNumberTool from './components/PageNumberTool';
 import RotateTool from './components/RotateTool';
 import OCRTool from './components/OCRTool';
+import DocumentConverterTool from './components/DocumentConverterTool';
 import UpdateNotification from './components/UpdateNotification';
 
-type ToolType = 'compress' | 'convert' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'insert' | 'numbers' | 'rotate' | 'ocr' | null;
+type ToolType = 'compress' | 'convert' | 'documents' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'insert' | 'numbers' | 'rotate' | 'ocr' | null;
 
 const RELEASE_NOTES = {
   version: 'v3.0.1',
@@ -32,6 +33,7 @@ const getToolDetails = (id: ToolType) => {
     case 'split': return { name: 'Split PDF', icon: '✂️', desc: 'Extract pages' };
     case 'insert': return { name: 'Insert Page', icon: '➕', desc: 'Add a page' };
     case 'convert': return { name: 'Image Converter', icon: '🔄', desc: 'PDF ↔ IMG' };
+    case 'documents': return { name: 'Office Converter', icon: '🧾', desc: 'PDF ↔ Office' };
     case 'sign': return { name: 'Sign PDF', icon: '✍️', desc: 'Digital signature' };
     case 'ocr': return { name: 'Image OCR', icon: '🔍', desc: 'Extract text' };
     case 'watermark': return { name: 'Watermark', icon: '🛡️', desc: 'Add stamp' };
@@ -320,6 +322,7 @@ export default function App() {
                     <ToolCard title="Optimize Image" desc="Web Ready" icon="📉" onClick={() => navigateToTool('optimize')} delayClass="delay-[450ms]" />
                     <ToolCard title="Page Numbers" desc="Pagination" icon="🔢" onClick={() => navigateToTool('numbers')} delayClass="delay-[500ms]" />
                     <ToolCard title="Rotate" desc="Orientation" icon="↻" onClick={() => navigateToTool('rotate')} delayClass="delay-[550ms]" />
+                    <ToolCard title="Office Converter" desc="PDF ↔ Docs" icon="🧾" onClick={() => navigateToTool('documents')} delayClass="delay-[600ms]" />
                 </div>
             </div>
           </>
@@ -344,6 +347,7 @@ export default function App() {
             {activeTool === 'numbers' && <PageNumberTool />}
             {activeTool === 'rotate' && <RotateTool />}
             {activeTool === 'ocr' && <OCRTool />}
+            {activeTool === 'documents' && <DocumentConverterTool />}
           </div>
         )}
       </main>
