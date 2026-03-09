@@ -11,9 +11,44 @@ import InsertPageTool from './components/InsertPageTool';
 import PageNumberTool from './components/PageNumberTool';
 import RotateTool from './components/RotateTool';
 import OCRTool from './components/OCRTool';
+import DocumentConverterTool from './components/DocumentConverterTool';
 import UpdateNotification from './components/UpdateNotification';
 
-type ToolType = 'compress' | 'convert' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'insert' | 'numbers' | 'rotate' | 'ocr' | null;
+type ToolType = 'compress' | 'convert' | 'documents' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'insert' | 'numbers' | 'rotate' | 'ocr' | null;
+
+
+const APP_BASE_PATH = '/pdf-toolkit-app/';
+
+const TOOL_ROUTES: Record<string, Exclude<ToolType, null>> = {
+  'compress-pdf': 'compress',
+  'merge-pdf': 'merge',
+  'split-pdf': 'split',
+  'insert-page': 'insert',
+  'image-converter': 'convert',
+  'office-converter': 'documents',
+  'sign-pdf': 'sign',
+  'image-ocr': 'ocr',
+  'watermark-pdf': 'watermark',
+  'optimize-image': 'optimize',
+  'page-numbers': 'numbers',
+  'rotate-pdf': 'rotate',
+};
+
+const getToolFromPathname = (pathname: string): ToolType => {
+  const trimmed = pathname.startsWith(APP_BASE_PATH)
+    ? pathname.slice(APP_BASE_PATH.length)
+    : pathname.replace(/^\/+/, '');
+
+  const normalized = trimmed.replace(/\/+$/, '');
+  return TOOL_ROUTES[normalized] || null;
+};
+
+const getRouteForTool = (toolId: ToolType): string | null => {
+  if (!toolId) return null;
+
+  const entry = Object.entries(TOOL_ROUTES).find(([, tool]) => tool === toolId);
+  return entry ? entry[0] : null;
+};
 
 const RELEASE_NOTES = {
   version: 'v3.0.1',
@@ -32,6 +67,7 @@ const getToolDetails = (id: ToolType) => {
     case 'split': return { name: 'Split PDF', icon: '✂️', desc: 'Extract pages' };
     case 'insert': return { name: 'Insert Page', icon: '➕', desc: 'Add a page' };
     case 'convert': return { name: 'Image Converter', icon: '🔄', desc: 'PDF ↔ IMG' };
+    case 'documents': return { name: 'Office Converter', icon: '🧾', desc: 'PDF ↔ Office' };
     case 'sign': return { name: 'Sign PDF', icon: '✍️', desc: 'Digital signature' };
     case 'ocr': return { name: 'Image OCR', icon: '🔍', desc: 'Extract text' };
     case 'watermark': return { name: 'Watermark', icon: '🛡️', desc: 'Add stamp' };
@@ -81,27 +117,44 @@ export default function App() {
 
   // 3. Navigation
   useEffect(() => {
-    const handlePopState = (event: PopStateEvent) => {
-      const toolId = event.state?.tool;
-      setActiveTool(toolId || null);
+    const handlePopState = () => {
+      const toolFromPath = getToolFromPathname(window.location.pathname);
+      if (toolFromPath) {
+        setActiveTool(toolFromPath);
+        return;
+      }
+
+      if (window.location.hash) {
+        const toolFromHash = window.location.hash.substring(1) as ToolType;
+        if (getToolDetails(toolFromHash).name) {
+          setActiveTool(toolFromHash);
+          return;
+        }
+      }
+
+      setActiveTool(null);
     };
+
     window.addEventListener('popstate', handlePopState);
-    if (window.location.hash) {
-      const toolFromHash = window.location.hash.substring(1) as ToolType;
-      if (getToolDetails(toolFromHash).name) setActiveTool(toolFromHash);
-    }
+    handlePopState();
+
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   const navigateToTool = (toolId: ToolType) => {
     setActiveTool(toolId);
-    if (toolId) window.history.pushState({ tool: toolId }, '', `#${toolId}`);
+
+    const route = getRouteForTool(toolId);
+    if (route) {
+      window.history.pushState({ tool: toolId }, '', `${APP_BASE_PATH}${route}`);
+    }
+
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const navigateHome = () => {
     setActiveTool(null);
-    window.history.pushState({}, '', window.location.pathname);
+    window.history.pushState({}, '', APP_BASE_PATH);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -320,6 +373,7 @@ export default function App() {
                     <ToolCard title="Optimize Image" desc="Web Ready" icon="📉" onClick={() => navigateToTool('optimize')} delayClass="delay-[450ms]" />
                     <ToolCard title="Page Numbers" desc="Pagination" icon="🔢" onClick={() => navigateToTool('numbers')} delayClass="delay-[500ms]" />
                     <ToolCard title="Rotate" desc="Orientation" icon="↻" onClick={() => navigateToTool('rotate')} delayClass="delay-[550ms]" />
+                    <ToolCard title="Office Converter" desc="PDF ↔ Docs" icon="🧾" onClick={() => navigateToTool('documents')} delayClass="delay-[600ms]" />
                 </div>
             </div>
           </>
@@ -344,6 +398,7 @@ export default function App() {
             {activeTool === 'numbers' && <PageNumberTool />}
             {activeTool === 'rotate' && <RotateTool />}
             {activeTool === 'ocr' && <OCRTool />}
+            {activeTool === 'documents' && <DocumentConverterTool />}
           </div>
         )}
       </main>

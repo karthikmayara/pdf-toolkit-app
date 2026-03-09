@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#4f46e5" />
     <meta name="description" content="Offline PDF Compression Tool. Installable on Mobile and Desktop." />
+    <meta name="robots" content="index, follow" />
     <title>PDF Toolkit Pro</title>
     
     <!-- PWA Manifest -->
@@ -81,6 +82,12 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://unpkg.com/fflate@0.8.2/umd/index.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+    <!-- Office conversion libs (loaded from CDN on first run) -->
+    <script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
 </head>
   <body class="bg-slate-50 dark:bg-[#0b0f19] transition-colors duration-300">
     <div id="root"></div>
