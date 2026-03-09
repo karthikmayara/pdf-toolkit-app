@@ -16,6 +16,40 @@ import UpdateNotification from './components/UpdateNotification';
 
 type ToolType = 'compress' | 'convert' | 'documents' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'insert' | 'numbers' | 'rotate' | 'ocr' | null;
 
+
+const APP_BASE_PATH = '/pdf-toolkit-app/';
+
+const TOOL_ROUTES: Record<string, Exclude<ToolType, null>> = {
+  'compress-pdf': 'compress',
+  'merge-pdf': 'merge',
+  'split-pdf': 'split',
+  'insert-page': 'insert',
+  'image-converter': 'convert',
+  'office-converter': 'documents',
+  'sign-pdf': 'sign',
+  'image-ocr': 'ocr',
+  'watermark-pdf': 'watermark',
+  'optimize-image': 'optimize',
+  'page-numbers': 'numbers',
+  'rotate-pdf': 'rotate',
+};
+
+const getToolFromPathname = (pathname: string): ToolType => {
+  const trimmed = pathname.startsWith(APP_BASE_PATH)
+    ? pathname.slice(APP_BASE_PATH.length)
+    : pathname.replace(/^\/+/, '');
+
+  const normalized = trimmed.replace(/\/+$/, '');
+  return TOOL_ROUTES[normalized] || null;
+};
+
+const getRouteForTool = (toolId: ToolType): string | null => {
+  if (!toolId) return null;
+
+  const entry = Object.entries(TOOL_ROUTES).find(([, tool]) => tool === toolId);
+  return entry ? entry[0] : null;
+};
+
 const RELEASE_NOTES = {
   version: 'v3.0.7',
   notes: [
@@ -80,27 +114,44 @@ export default function App() {
 
   // 3. Navigation
   useEffect(() => {
-    const handlePopState = (event: PopStateEvent) => {
-      const toolId = event.state?.tool;
-      setActiveTool(toolId || null);
+    const handlePopState = () => {
+      const toolFromPath = getToolFromPathname(window.location.pathname);
+      if (toolFromPath) {
+        setActiveTool(toolFromPath);
+        return;
+      }
+
+      if (window.location.hash) {
+        const toolFromHash = window.location.hash.substring(1) as ToolType;
+        if (getToolDetails(toolFromHash).name) {
+          setActiveTool(toolFromHash);
+          return;
+        }
+      }
+
+      setActiveTool(null);
     };
+
     window.addEventListener('popstate', handlePopState);
-    if (window.location.hash) {
-      const toolFromHash = window.location.hash.substring(1) as ToolType;
-      if (getToolDetails(toolFromHash).name) setActiveTool(toolFromHash);
-    }
+    handlePopState();
+
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   const navigateToTool = (toolId: ToolType) => {
     setActiveTool(toolId);
-    if (toolId) window.history.pushState({ tool: toolId }, '', `#${toolId}`);
+
+    const route = getRouteForTool(toolId);
+    if (route) {
+      window.history.pushState({ tool: toolId }, '', `${APP_BASE_PATH}${route}`);
+    }
+
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const navigateHome = () => {
     setActiveTool(null);
-    window.history.pushState({}, '', window.location.pathname);
+    window.history.pushState({}, '', APP_BASE_PATH);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
