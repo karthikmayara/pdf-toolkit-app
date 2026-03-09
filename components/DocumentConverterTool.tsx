@@ -8,18 +8,6 @@ import {
   getUnsupportedPairReason,
 } from '../services/documentConversion';
 
-interface QueueItem {
-  id: string;
-  file: File;
-  status: 'idle' | 'processing' | 'done' | 'error';
-  progress: number;
-  step: string;
-  targetFormat: DocumentTargetFormat;
-  error?: string;
-  resultBlob?: Blob;
-  resultFileName?: string;
-}
-
 const SOURCE_TYPES = [
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -43,134 +31,97 @@ const formatBytes = (bytes?: number, decimals = 2) => {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 };
 
-const createQueueItem = (file: File, targetFormat: DocumentTargetFormat): QueueItem => ({
-  id: `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
-  file,
-  status: 'idle',
-  progress: 0,
-  step: 'Ready',
-  targetFormat,
-});
-
 const DocumentConverterTool: React.FC = () => {
-  const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [file, setFile] = useState<File | null>(null);
   const [targetFormat, setTargetFormat] = useState<DocumentTargetFormat>('application/pdf');
   const [status, setStatus] = useState<ProcessStatus>({ isProcessing: false, currentStep: '', progress: 0 });
   const [isDragging, setIsDragging] = useState(false);
-  const [toolError, setToolError] = useState<string | undefined>(undefined);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const capabilityRows = useMemo(() => getCapabilityRows(), []);
-  const pendingCount = queue.filter((item) => item.status === 'idle' || item.status === 'error').length;
+  const unsupportedReason = useMemo(() => {
+    if (!file) return null;
+    return getUnsupportedPairReason(file.type, targetFormat);
+  }, [file, targetFormat]);
 
-  const addFilesToQueue = (files: File[]) => {
-    const valid: File[] = [];
-    const invalid: string[] = [];
+  const resetState = () => {
+    setFile(null);
+    setStatus({ isProcessing: false, currentStep: '', progress: 0, resultBlob: undefined, error: undefined });
+    if (inputRef.current) inputRef.current.value = '';
+  };
 
-    files.forEach((file) => {
-      if (SOURCE_TYPES.includes(file.type)) valid.push(file);
-      else invalid.push(file.name);
-    });
+  const clearResultOnly = () => {
+    setStatus(prev => ({
+      ...prev,
+      resultBlob: undefined,
+      resultFileName: undefined,
+      compressedSize: undefined,
+      error: undefined,
+      currentStep: '',
+      progress: 0,
+    }));
+  };
 
-    if (invalid.length) {
-      setToolError(`Unsupported files skipped: ${invalid.join(', ')}`);
-    } else {
-      setToolError(undefined);
+  const selectFile = (selected: File | undefined) => {
+    if (!selected) return;
+
+    if (!SOURCE_TYPES.includes(selected.type)) {
+      setStatus(prev => ({ ...prev, error: 'Unsupported file. Use PDF, DOCX, XLSX or PPTX.' }));
+      return;
     }
 
-    if (valid.length) {
-      const next = valid.map((file) => createQueueItem(file, targetFormat));
-      setQueue((prev) => [...prev, ...next]);
-    }
+    setFile(selected);
+    setStatus({ isProcessing: false, currentStep: '', progress: 0, error: undefined, resultBlob: undefined });
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files ? Array.from(e.target.files) : [];
-    addFilesToQueue(files);
+    selectFile(e.target.files?.[0]);
     if (e.target) e.target.value = '';
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    addFilesToQueue(Array.from(e.dataTransfer.files || []));
+    selectFile(e.dataTransfer.files?.[0]);
   };
 
-  const updateItem = (id: string, patch: Partial<QueueItem>) => {
-    setQueue((prev) => prev.map((item) => (item.id === id ? { ...item, ...patch } : item)));
-  };
+  const onStart = async () => {
+    if (!file || unsupportedReason) return;
 
-  const runSingle = async (item: QueueItem) => {
-    const unsupported = getUnsupportedPairReason(item.file.type, item.targetFormat);
-    if (unsupported) {
-      updateItem(item.id, { status: 'error', error: unsupported, progress: 0, step: 'Unsupported pair' });
-      return;
-    }
-
-    updateItem(item.id, { status: 'processing', error: undefined, progress: 0, step: 'Starting...' });
+    setStatus({
+      isProcessing: true,
+      currentStep: 'Preparing...',
+      progress: 5,
+      error: undefined,
+      originalSize: file.size,
+    });
 
     try {
       const { blob, filename } = await convertDocument(
-        { file: item.file, targetFormat: item.targetFormat },
-        (progress, step) => updateItem(item.id, { progress, step })
+        { file, targetFormat },
+        (progress, step) => setStatus(prev => ({ ...prev, progress, currentStep: step }))
       );
 
-      updateItem(item.id, {
-        status: 'done',
+      setStatus({
+        isProcessing: false,
+        currentStep: 'Completed!',
         progress: 100,
-        step: 'Completed',
         resultBlob: blob,
         resultFileName: filename,
+        originalSize: file.size,
+        compressedSize: blob.size,
       });
     } catch (error: any) {
-      updateItem(item.id, {
-        status: 'error',
-        progress: 0,
-        step: 'Failed',
-        error: error?.message || 'Conversion failed.',
-      });
+      setStatus(prev => ({ ...prev, isProcessing: false, error: error?.message || 'Conversion failed.' }));
     }
   };
 
-  const runQueue = async () => {
-    const toProcess = queue.filter((item) => item.status === 'idle' || item.status === 'error');
-    if (!toProcess.length) return;
-
-    setStatus({ isProcessing: true, currentStep: 'Starting queue...', progress: 0 });
-
-    for (let i = 0; i < toProcess.length; i++) {
-      const item = toProcess[i];
-      setStatus({ isProcessing: true, currentStep: `Processing ${item.file.name}`, progress: Math.round((i / toProcess.length) * 100) });
-      // eslint-disable-next-line no-await-in-loop
-      await runSingle(item);
-    }
-
-    setStatus({ isProcessing: false, currentStep: 'Queue completed', progress: 100 });
-  };
-
-  const retryItem = async (id: string) => {
-    const item = queue.find((x) => x.id === id);
-    if (!item || status.isProcessing) return;
-    await runSingle(item);
-  };
-
-  const removeItem = (id: string) => {
-    setQueue((prev) => prev.filter((item) => item.id !== id));
-  };
-
-  const resetAll = () => {
-    setQueue([]);
-    setStatus({ isProcessing: false, currentStep: '', progress: 0, error: undefined });
-    setToolError(undefined);
-    if (inputRef.current) inputRef.current.value = '';
-  };
-
-  const downloadItem = (item: QueueItem) => {
-    if (!item.resultBlob || !item.resultFileName) return;
-    const url = URL.createObjectURL(item.resultBlob);
+  const onDownload = () => {
+    if (!status.resultBlob || !status.resultFileName) return;
+    const url = URL.createObjectURL(status.resultBlob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = item.resultFileName;
+    a.download = status.resultFileName;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -183,7 +134,7 @@ const DocumentConverterTool: React.FC = () => {
         <div className="w-full md:w-[36%] bg-gradient-to-b from-indigo-600 to-indigo-700 p-6 sm:p-8 flex flex-col gap-6">
           <div>
             <h3 className="text-2xl sm:text-3xl font-black">Office ↔ PDF</h3>
-            <p className="text-indigo-100 mt-2 text-sm">Batch conversion, preset targets, and clear compatibility guidance.</p>
+            <p className="text-indigo-100 mt-2 text-sm">Single-file conversion with clear compatibility guidance.</p>
           </div>
 
           <div className="space-y-2">
@@ -192,7 +143,10 @@ const DocumentConverterTool: React.FC = () => {
               {FORMAT_PRESETS.map((preset) => (
                 <button
                   key={preset.value}
-                  onClick={() => setTargetFormat(preset.value)}
+                  onClick={() => {
+                    setTargetFormat(preset.value);
+                    clearResultOnly();
+                  }}
                   className={`text-xs rounded-lg px-3 py-2 border transition-colors ${
                     targetFormat === preset.value
                       ? 'border-white bg-white text-indigo-700 font-semibold'
@@ -216,19 +170,18 @@ const DocumentConverterTool: React.FC = () => {
             <input
               ref={inputRef}
               type="file"
-              multiple
               accept=".pdf,.docx,.xlsx,.pptx"
               onChange={handleFileChange}
               className="hidden"
             />
-            <p className="text-sm text-indigo-100 mb-3">Drop files here or choose manually</p>
+            <p className="text-sm text-indigo-100 mb-3">Drop one file here or choose manually</p>
             <button
               onClick={() => inputRef.current?.click()}
               className="px-4 py-2 bg-white text-indigo-700 rounded-lg font-semibold hover:bg-indigo-50"
             >
-              Add Files
+              {file ? 'Choose Another File' : 'Choose File'}
             </button>
-            <p className="text-xs text-indigo-100/90 mt-3">{queue.length} file(s) in queue</p>
+            {file && <p className="text-xs text-indigo-100 mt-3 break-all">{file.name}</p>}
           </div>
 
           <div className="rounded-xl bg-white/10 border border-white/20 p-3">
@@ -247,14 +200,17 @@ const DocumentConverterTool: React.FC = () => {
         <div className="w-full md:w-[64%] p-6 sm:p-8 space-y-6">
           <div>
             <h2 className="text-2xl sm:text-3xl font-black">Document Converter</h2>
-            <p className="text-slate-300 mt-1 text-sm">Set a target, add multiple files, then run queue conversion.</p>
+            <p className="text-slate-300 mt-1 text-sm">Select one file and convert using a supported pair.</p>
           </div>
 
           <div className="space-y-2">
-            <label className="block text-sm text-slate-300">Default target format for newly added files</label>
+            <label className="block text-sm text-slate-300">Convert to</label>
             <select
               value={targetFormat}
-              onChange={(e) => setTargetFormat(e.target.value as DocumentTargetFormat)}
+              onChange={(e) => {
+                setTargetFormat(e.target.value as DocumentTargetFormat);
+                clearResultOnly();
+              }}
               className="w-full rounded-xl bg-slate-800 border border-slate-600 px-3 py-2"
             >
               {TARGET_OPTIONS.map((opt) => (
@@ -263,74 +219,55 @@ const DocumentConverterTool: React.FC = () => {
             </select>
           </div>
 
-          <div className="flex flex-wrap gap-3">
-            <button
-              onClick={runQueue}
-              disabled={!pendingCount || status.isProcessing}
-              className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {status.isProcessing ? 'Processing...' : `Start Queue (${pendingCount})`}
-            </button>
-            <button onClick={resetAll} className="px-5 py-2 rounded-xl bg-slate-700 hover:bg-slate-600">Reset All</button>
-          </div>
-
-          {(status.currentStep || toolError) && (
-            <div className="rounded-xl bg-slate-800/80 border border-slate-700 p-4">
-              {status.currentStep && <div className="text-sm text-slate-300">{status.currentStep}</div>}
-              <div className="w-full h-2 rounded bg-slate-700 mt-2 overflow-hidden">
-                <div className="h-full bg-indigo-500" style={{ width: `${status.progress}%` }} />
-              </div>
-              {toolError && <p className="text-amber-300 text-sm mt-3">{toolError}</p>}
+          {unsupportedReason && (
+            <div className="rounded-xl bg-amber-500/10 border border-amber-400/30 p-4">
+              <p className="text-amber-200 text-sm">{unsupportedReason}</p>
             </div>
           )}
 
-          <div className="space-y-3">
-            {queue.length === 0 && (
-              <div className="rounded-xl border border-slate-700 bg-slate-900/40 p-4 text-sm text-slate-300">
-                No files in queue yet. Add files from the left panel.
-              </div>
-            )}
-
-            {queue.map((item) => {
-              const pairReason = getUnsupportedPairReason(item.file.type, item.targetFormat);
-              return (
-                <div key={item.id} className="rounded-xl border border-slate-700 bg-slate-900/50 p-4">
-                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
-                    <div>
-                      <p className="font-semibold text-slate-100 break-all">{item.file.name}</p>
-                      <p className="text-xs text-slate-400">Target: {TARGET_OPTIONS.find((x) => x.value === item.targetFormat)?.label} • {formatBytes(item.file.size)}</p>
-                    </div>
-                    <div className="text-xs px-2 py-1 rounded bg-slate-800 border border-slate-600 w-fit">{item.status.toUpperCase()}</div>
-                  </div>
-
-                  {pairReason && <p className="text-amber-300 text-xs mt-2">{pairReason}</p>}
-                  {item.step && <p className="text-slate-300 text-xs mt-2">{item.step}</p>}
-
-                  <div className="w-full h-2 rounded bg-slate-700 mt-2 overflow-hidden">
-                    <div className={`h-full ${item.status === 'error' ? 'bg-red-500' : 'bg-indigo-500'}`} style={{ width: `${item.progress}%` }} />
-                  </div>
-
-                  {item.error && <p className="text-red-300 text-xs mt-2">{item.error}</p>}
-
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    {item.status === 'done' && (
-                      <button onClick={() => downloadItem(item)} className="px-3 py-1.5 rounded-lg text-sm bg-emerald-600 hover:bg-emerald-500">
-                        Download
-                      </button>
-                    )}
-                    {item.status === 'error' && (
-                      <button onClick={() => retryItem(item.id)} className="px-3 py-1.5 rounded-lg text-sm bg-indigo-600 hover:bg-indigo-500">
-                        Retry
-                      </button>
-                    )}
-                    <button onClick={() => removeItem(item.id)} className="px-3 py-1.5 rounded-lg text-sm bg-slate-700 hover:bg-slate-600">
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={onStart}
+              disabled={!file || !!unsupportedReason || status.isProcessing}
+              className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {status.isProcessing ? 'Converting...' : 'Start Conversion'}
+            </button>
+            <button onClick={resetState} className="px-5 py-2 rounded-xl bg-slate-700 hover:bg-slate-600">
+              Reset
+            </button>
           </div>
+
+          {(status.isProcessing || status.currentStep || status.error) && (
+            <div className="rounded-xl bg-slate-800/80 border border-slate-700 p-4">
+              <div className="text-sm text-slate-300">{status.currentStep || 'Waiting...'}</div>
+              <div className="w-full h-2 rounded bg-slate-700 mt-2 overflow-hidden">
+                <div className="h-full bg-indigo-500" style={{ width: `${status.progress}%` }} />
+              </div>
+              {status.error && <p className="text-red-300 text-sm mt-3">{status.error}</p>}
+            </div>
+          )}
+
+          {status.resultBlob && (
+            <div className="rounded-xl bg-emerald-500/10 border border-emerald-400/30 p-4 space-y-3">
+              <p className="text-emerald-200 font-semibold">Conversion complete</p>
+              <p className="text-emerald-100 text-sm">{formatBytes(status.originalSize)} → {formatBytes(status.compressedSize)}</p>
+              <div className="flex flex-wrap gap-3">
+                <button onClick={onDownload} className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500">
+                  Download Result
+                </button>
+                <button
+                  onClick={() => {
+                    resetState();
+                    setTimeout(() => inputRef.current?.click(), 0);
+                  }}
+                  className="px-5 py-2 rounded-xl bg-slate-700 hover:bg-slate-600"
+                >
+                  Convert Another File
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
