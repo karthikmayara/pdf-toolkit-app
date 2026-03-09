@@ -1,6 +1,8 @@
-import { ProcessStatus } from '../types';
-
-export type DocumentTargetFormat = 'application/pdf' | 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' | 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' | 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+export type DocumentTargetFormat =
+  | 'application/pdf'
+  | 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  | 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  | 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 
 export interface DocumentConversionItem {
   file: File;
@@ -12,22 +14,60 @@ interface ConversionResult {
   filename: string;
 }
 
+type DocumentFamily = 'pdf' | 'docx' | 'xlsx' | 'pptx' | 'unknown';
+
 /**
- * Conversion entry point for Office ↔ PDF conversion.
+ * Human-readable reason for unsupported format pairs.
+ * The current tool intentionally supports PDF <-> Office flows.
+ */
+export const getUnsupportedPairReason = (
+  sourceMime: string,
+  targetMime: DocumentTargetFormat
+): string | null => {
+  const source = getDocumentFamily(sourceMime);
+  const target = getDocumentFamily(targetMime);
+
+  if (source === 'unknown' || target === 'unknown') {
+    return 'Unsupported file type. Use PDF, DOCX, XLSX, or PPTX.';
+  }
+
+  if (source === target) {
+    return 'Source and target formats are the same. Choose a different target format.';
+  }
+
+  // This tool supports only pairs that include PDF.
+  if (source !== 'pdf' && target !== 'pdf') {
+    if (source === 'pptx' && target === 'xlsx') {
+      return 'Direct PPTX → XLSX is not supported because slides are free-form, while Excel requires tabular structure. Convert PPTX → PDF first, then PDF → XLSX.';
+    }
+
+    if (source === 'pptx' && target === 'docx') {
+      return 'Direct PPTX → DOCX is not supported in this tool. Convert PPTX → PDF first, then PDF → DOCX.';
+    }
+
+    return 'Direct Office-to-Office conversion is not supported in this tool. Use PDF as a bridge (Office → PDF, then PDF → Office).';
+  }
+
+  return null;
+};
+
+/**
+ * Conversion entry point for Office <-> PDF conversion.
  *
  * Notes:
- * - This implementation prioritizes reliability in-browser with zero backend.
- * - It preserves text content, but not advanced layout/styling parity.
+ * - Browser-only implementation (no backend).
+ * - Focuses on text/content extraction and regeneration.
  */
 export const convertDocument = async (
   item: DocumentConversionItem,
   onProgress: (progress: number, step: string) => void
 ): Promise<ConversionResult> => {
-  const sourceType = item.file.type;
-
-  if (sourceType === item.targetFormat) {
-    throw new Error('Source and target formats are the same.');
+  const pairIssue = getUnsupportedPairReason(item.file.type, item.targetFormat);
+  if (pairIssue) {
+    throw new Error(pairIssue);
   }
+
+  const sourceType = item.file.type;
 
   if (sourceType === 'application/pdf') {
     onProgress(20, 'Extracting text from PDF...');
@@ -50,16 +90,20 @@ export const convertDocument = async (
     }
   }
 
-  if (item.targetFormat === 'application/pdf') {
-    onProgress(25, 'Extracting text from source file...');
-    const text = await extractTextFromOfficeFile(item.file);
+  onProgress(25, 'Extracting text from source file...');
+  const text = await extractTextFromOfficeFile(item.file);
 
-    onProgress(60, 'Generating PDF...');
-    const blob = await generatePdfFromText(text);
-    return { blob, filename: renameExtension(item.file.name, 'pdf') };
-  }
+  onProgress(60, 'Generating PDF...');
+  const blob = await generatePdfFromText(text);
+  return { blob, filename: renameExtension(item.file.name, 'pdf') };
+};
 
-  throw new Error('This file pair is not supported. Choose PDF ↔ Word/Excel/PowerPoint.');
+const getDocumentFamily = (mime: string): DocumentFamily => {
+  if (mime === 'application/pdf') return 'pdf';
+  if (mime.includes('wordprocessingml')) return 'docx';
+  if (mime.includes('spreadsheetml')) return 'xlsx';
+  if (mime.includes('presentationml')) return 'pptx';
+  return 'unknown';
 };
 
 const renameExtension = (name: string, ext: string) => {
@@ -68,14 +112,12 @@ const renameExtension = (name: string, ext: string) => {
 };
 
 const extractTextFromPdf = async (file: File): Promise<string[]> => {
-  if (!window.pdfjsLib) {
-    throw new Error('PDF.js is not loaded. Please check internet connection and refresh.');
-  }
+  if (!window.pdfjsLib) throw new Error('PDF.js is not loaded. Please check internet connection and refresh.');
 
   const buffer = await file.arrayBuffer();
   const pdf = await window.pdfjsLib.getDocument({ data: buffer }).promise;
-
   const pages: string[] = [];
+
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
@@ -87,17 +129,13 @@ const extractTextFromPdf = async (file: File): Promise<string[]> => {
 };
 
 const generateDocxFromPages = async (pages: string[]): Promise<Blob> => {
-  if (!window.docx) {
-    throw new Error('DOCX library is not loaded. Please refresh with internet.');
-  }
+  if (!window.docx) throw new Error('DOCX library is not loaded. Please refresh with internet.');
 
   const doc = new window.docx.Document({
     sections: pages.map((pageText, index) => ({
       properties: {},
       children: [
-        new window.docx.Paragraph({
-          children: [new window.docx.TextRun({ text: `Page ${index + 1}`, bold: true })]
-        }),
+        new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: `Page ${index + 1}`, bold: true })] }),
         new window.docx.Paragraph({ text: pageText }),
       ]
     }))
@@ -107,9 +145,7 @@ const generateDocxFromPages = async (pages: string[]): Promise<Blob> => {
 };
 
 const generateXlsxFromPages = async (pages: string[]): Promise<Blob> => {
-  if (!window.XLSX) {
-    throw new Error('XLSX library is not loaded. Please refresh with internet.');
-  }
+  if (!window.XLSX) throw new Error('XLSX library is not loaded. Please refresh with internet.');
 
   const rows: string[][] = [['Page', 'Extracted Text']];
   pages.forEach((text, index) => rows.push([String(index + 1), text]));
@@ -123,9 +159,7 @@ const generateXlsxFromPages = async (pages: string[]): Promise<Blob> => {
 };
 
 const generatePptxFromPages = async (pages: string[]): Promise<Blob> => {
-  if (!window.PptxGenJS) {
-    throw new Error('PPTX library is not loaded. Please refresh with internet.');
-  }
+  if (!window.PptxGenJS) throw new Error('PPTX library is not loaded. Please refresh with internet.');
 
   const pptx = new window.PptxGenJS();
   pptx.layout = 'LAYOUT_WIDE';
@@ -152,25 +186,19 @@ const extractTextFromOfficeFile = async (file: File): Promise<string> => {
   if (file.type.includes('spreadsheetml')) {
     if (!window.XLSX) throw new Error('XLSX library is not loaded.');
     const wb = window.XLSX.read(buffer, { type: 'array' });
-    const sheetText = wb.SheetNames.map((sheetName: string) => {
-      const sheet = wb.Sheets[sheetName];
-      const csv = window.XLSX.utils.sheet_to_csv(sheet);
+    return wb.SheetNames.map((sheetName: string) => {
+      const csv = window.XLSX.utils.sheet_to_csv(wb.Sheets[sheetName]);
       return `Sheet: ${sheetName}\n${csv}`;
-    });
-    return sheetText.join('\n\n');
+    }).join('\n\n');
   }
 
   if (file.type.includes('presentationml')) {
-    // PPTX is a zip of XML files. We read slide XML and collect text nodes.
     if (!window.JSZip) throw new Error('JSZip library is not loaded.');
     const zip = await window.JSZip.loadAsync(buffer);
 
     const slidePaths = Object.keys(zip.files)
       .filter(path => /^ppt\/slides\/slide\d+\.xml$/.test(path))
-      .sort((a, b) => {
-        const getNum = (p: string) => Number(p.match(/slide(\d+)\.xml/)?.[1] || 0);
-        return getNum(a) - getNum(b);
-      });
+      .sort((a, b) => Number(a.match(/slide(\d+)\.xml/)?.[1] || 0) - Number(b.match(/slide(\d+)\.xml/)?.[1] || 0));
 
     const textChunks: string[] = [];
     for (const path of slidePaths) {
@@ -186,9 +214,7 @@ const extractTextFromOfficeFile = async (file: File): Promise<string> => {
 };
 
 const generatePdfFromText = async (text: string): Promise<Blob> => {
-  if (!window.PDFLib) {
-    throw new Error('PDF-Lib is not loaded. Please refresh with internet.');
-  }
+  if (!window.PDFLib) throw new Error('PDF-Lib is not loaded. Please refresh with internet.');
 
   const { PDFDocument, StandardFonts, rgb } = window.PDFLib;
   const pdfDoc = await PDFDocument.create();
@@ -200,21 +226,12 @@ const generatePdfFromText = async (text: string): Promise<Blob> => {
   const lineHeight = 14;
   const maxWidth = pageSize.width - margin * 2;
   const maxLinesPerPage = Math.floor((pageSize.height - margin * 2) / lineHeight);
-
   const wrapped = wrapText(text || 'No text extracted from input file.', font, fontSize, maxWidth);
 
   for (let i = 0; i < wrapped.length; i += maxLinesPerPage) {
     const page = pdfDoc.addPage([pageSize.width, pageSize.height]);
-    const slice = wrapped.slice(i, i + maxLinesPerPage);
-
-    slice.forEach((line, idx) => {
-      page.drawText(line, {
-        x: margin,
-        y: pageSize.height - margin - idx * lineHeight,
-        size: fontSize,
-        font,
-        color: rgb(0, 0, 0)
-      });
+    wrapped.slice(i, i + maxLinesPerPage).forEach((line, idx) => {
+      page.drawText(line, { x: margin, y: pageSize.height - margin - idx * lineHeight, size: fontSize, font, color: rgb(0, 0, 0) });
     });
   }
 
@@ -231,9 +248,8 @@ const wrapText = (text: string, font: any, fontSize: number, maxWidth: number): 
 
     words.forEach((word) => {
       const candidate = current ? `${current} ${word}` : word;
-      if (font.widthOfTextAtSize(candidate, fontSize) <= maxWidth) {
-        current = candidate;
-      } else {
+      if (font.widthOfTextAtSize(candidate, fontSize) <= maxWidth) current = candidate;
+      else {
         if (current) lines.push(current);
         current = word;
       }
