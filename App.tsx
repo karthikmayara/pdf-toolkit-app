@@ -17,9 +17,9 @@ import UpdateNotification from './components/UpdateNotification';
 type ToolType = 'compress' | 'convert' | 'documents' | 'merge' | 'optimize' | 'sign' | 'watermark' | 'split' | 'insert' | 'numbers' | 'rotate' | 'ocr' | null;
 
 const RELEASE_NOTES = {
-  version: 'v3.0.3',
+  version: 'v3.0.4',
   notes: [
-    'corrected the UI for pdf to powerpoint/excel/word conversion',
+    'Add Office ↔ PDF Document Converter with worker-based processing',
   ]
 };
 
