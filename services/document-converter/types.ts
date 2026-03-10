@@ -1,0 +1,33 @@
+export type DocumentTargetFormat =
+  | 'application/pdf'
+  | 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  | 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  | 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+
+export type DocumentFamily = 'pdf' | 'docx' | 'xlsx' | 'pptx' | 'unknown';
+
+export interface DocumentConversionItem {
+  file: File;
+  targetFormat: DocumentTargetFormat;
+}
+
+export interface ConversionResult {
+  blob: Blob;
+  filename: string;
+}
+
+export interface ConversionRunOptions {
+  onProgress: (progress: number, step: string) => void;
+  signal?: AbortSignal;
+  /**
+   * Worker-ready hook: callers may inject an executor later (worker proxy, task scheduler, etc.).
+   * Defaults to running tasks on the main thread.
+   */
+  executor?: ConversionExecutor;
+}
+
+export type ConversionExecutor = <T>(task: () => Promise<T>) => Promise<T>;
+
+export interface ConversionDependencies {
+  execute: ConversionExecutor;
+}
