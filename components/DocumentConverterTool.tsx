@@ -22,6 +22,13 @@ const TARGET_OPTIONS: { value: DocumentTargetFormat; label: string }[] = [
   { value: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', label: 'PPTX (PowerPoint)' },
 ];
 
+const SOURCE_EXTENSIONS = ['.pdf', '.docx', '.xlsx', '.pptx'];
+
+const hasSupportedExtension = (name: string) => {
+  const lower = name.toLowerCase();
+  return SOURCE_EXTENSIONS.some((ext) => lower.endsWith(ext));
+};
+
 const formatBytes = (bytes?: number, decimals = 2) => {
   if (!bytes || bytes <= 0) return '0 B';
   const k = 1024;
@@ -37,14 +44,18 @@ const DocumentConverterTool: React.FC = () => {
   const [status, setStatus] = useState<ProcessStatus>({ isProcessing: false, currentStep: '', progress: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const activeJobIdRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
 
   const capabilityRows = useMemo(() => getCapabilityRows(), []);
   const unsupportedReason = useMemo(() => {
     if (!file) return null;
-    return getUnsupportedPairReason(file.type, targetFormat);
+    return getUnsupportedPairReason(file.type, targetFormat, file.name);
   }, [file, targetFormat]);
 
   const resetState = () => {
+    // Cancel any in-flight conversion before clearing state to prevent stale result overwrite.
+    abortRef.current?.abort();
     setFile(null);
     setStatus({ isProcessing: false, currentStep: '', progress: 0, resultBlob: undefined, error: undefined });
     if (inputRef.current) inputRef.current.value = '';
@@ -65,7 +76,10 @@ const DocumentConverterTool: React.FC = () => {
   const selectFile = (selected: File | undefined) => {
     if (!selected) return;
 
-    if (!SOURCE_TYPES.includes(selected.type)) {
+    const supportedByMime = SOURCE_TYPES.includes(selected.type);
+    const supportedByExtension = hasSupportedExtension(selected.name);
+
+    if (!supportedByMime && !supportedByExtension) {
       setStatus(prev => ({ ...prev, error: 'Unsupported file. Use PDF, DOCX, XLSX or PPTX.' }));
       return;
     }
@@ -88,6 +102,12 @@ const DocumentConverterTool: React.FC = () => {
   const onStart = async () => {
     if (!file || unsupportedReason) return;
 
+    // Start a new conversion job and invalidate any previous in-flight job.
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const jobId = ++activeJobIdRef.current;
+
     setStatus({
       isProcessing: true,
       currentStep: 'Preparing...',
@@ -99,8 +119,14 @@ const DocumentConverterTool: React.FC = () => {
     try {
       const { blob, filename } = await convertDocument(
         { file, targetFormat },
-        (progress, step) => setStatus(prev => ({ ...prev, progress, currentStep: step }))
+        (progress, step) => {
+          if (activeJobIdRef.current !== jobId) return;
+          setStatus(prev => ({ ...prev, progress, currentStep: step }));
+        },
+        controller.signal
       );
+
+      if (activeJobIdRef.current !== jobId) return;
 
       setStatus({
         isProcessing: false,
@@ -112,7 +138,16 @@ const DocumentConverterTool: React.FC = () => {
         compressedSize: blob.size,
       });
     } catch (error: any) {
-      setStatus(prev => ({ ...prev, isProcessing: false, error: error?.message || 'Conversion failed.' }));
+      if (activeJobIdRef.current !== jobId) return;
+      setStatus(prev => ({
+        ...prev,
+        isProcessing: false,
+        error: controller.signal.aborted ? 'Conversion cancelled.' : error?.message || 'Conversion failed.'
+      }));
+    } finally {
+      if (activeJobIdRef.current === jobId) {
+        abortRef.current = null;
+      }
     }
   };
 
