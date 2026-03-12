@@ -44,18 +44,5 @@ export const getUnsupportedPairReason = (
     return 'Source and target formats are the same. Choose a different target format.';
   }
 
-  // The converter intentionally supports only pairs that include PDF.
-  if (source !== 'pdf' && target !== 'pdf') {
-    if (source === 'pptx' && target === 'xlsx') {
-      return 'Direct PPTX → XLSX is not supported because slides are free-form while Excel expects tabular structure. Use PPTX → PDF, then PDF → XLSX.';
-    }
-
-    if (source === 'pptx' && target === 'docx') {
-      return 'Direct PPTX → DOCX is not supported in this tool. Use PPTX → PDF, then PDF → DOCX.';
-    }
-
-    return 'Direct Office-to-Office conversion is not supported. Use PDF as a bridge (Office → PDF, then PDF → Office).';
-  }
-
-  return null;
+    return null;
 };
