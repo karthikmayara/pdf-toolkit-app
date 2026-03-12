@@ -122,6 +122,31 @@ export const runDocumentConversion = async (
   const deps = makeDependencies(options);
   const sourceFamily = detectDocumentFamily(item.file.type, item.file.name);
 
+  const targetFamily = detectDocumentFamily(item.targetFormat);
+
+  if (sourceFamily !== 'pdf' && targetFamily !== 'pdf') {
+    options.onProgress(8, 'Preparing Office → PDF bridge...');
+    const intermediate = await runDocumentConversion(
+      {
+        file: item.file,
+        targetFormat: 'application/pdf',
+      },
+      options
+    );
+
+    const bridgedFile = new File([intermediate.blob], renameExtension(item.file.name, 'pdf'), {
+      type: 'application/pdf',
+    });
+
+    return runDocumentConversion(
+      {
+        file: bridgedFile,
+        targetFormat: item.targetFormat,
+      },
+      options
+    );
+  }
+
   // Deterministic progress model:
   // - 0..10: preparation
   // - 10..55: extraction (page/sheet/slide aware)
@@ -142,11 +167,6 @@ export const runDocumentConversion = async (
     const result = await generateFromPdfPages(pages, item, options, deps);
     options.onProgress(100, 'Completed!');
     return result;
-  }
-
-  // Office input path (DOCX/XLSX/PPTX) supports only conversion to PDF.
-  if (item.targetFormat !== 'application/pdf') {
-    throw new Error('Only Office → PDF is supported for Office source files. Use PDF as an intermediate for Office → Office.');
   }
 
   const text = await extractOfficeText(item, options, deps);

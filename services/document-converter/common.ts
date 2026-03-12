@@ -1,8 +1,14 @@
 /** Shared helpers used by extractor/generator modules. */
 
+export interface PageLine {
+  text: string;
+  fontSize?: number;
+}
+
 export interface PageText {
   lines: string[];
   flatText: string;
+  lineMeta?: PageLine[];
 }
 
 export const renameExtension = (name: string, ext: string) => {
