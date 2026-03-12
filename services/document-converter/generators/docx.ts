@@ -1,6 +1,6 @@
 import { getDocx } from '../adapters/runtimeAdapters';
 import { mapProgressRange, PageText, throwIfAborted } from '../common';
-import { inferHeading } from '../heuristics/headingInference';
+import { buildHeadingClassifier } from '../heuristics/headingInference';
 
 export interface PageGenerateOptions {
   signal?: AbortSignal;
@@ -19,7 +19,11 @@ export const generateDocxFromPages = async (pages: PageText[], options: PageGene
   onProgress?.(progressStart, `Generating DOCX (0/${pages.length} pages)...`);
 
   const sections = pages.map((page, index) => {
-    const sourceLines = page.lines.length ? page.lines : page.flatText.split(/\r?\n/);
+    const sourceLines = page.lineMeta?.length
+      ? page.lineMeta
+      : (page.lines.length ? page.lines : page.flatText.split(/\r?\n/)).map((line) => ({ text: line }));
+    const isHeading = buildHeadingClassifier(sourceLines);
+
     const children = [
       new docx.Paragraph({
         children: [new docx.TextRun({ text: `Page ${index + 1}`, bold: true })],
@@ -29,8 +33,8 @@ export const generateDocxFromPages = async (pages: PageText[], options: PageGene
     sourceLines.forEach((line) => {
       children.push(
         new docx.Paragraph({
-          heading: inferHeading(line) ? docx.HeadingLevel.HEADING_2 : undefined,
-          children: [new docx.TextRun({ text: line })],
+          heading: isHeading(line) ? docx.HeadingLevel.HEADING_2 : undefined,
+          children: [new docx.TextRun({ text: line.text })],
         })
       );
     });

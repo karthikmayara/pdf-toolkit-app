@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ProcessStatus } from '../types';
 import {
   convertDocument,
@@ -46,6 +46,15 @@ const DocumentConverterTool: React.FC = () => {
   const inputRef = useRef<HTMLInputElement>(null);
   const activeJobIdRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
+  const workerRef = useRef<Worker | null>(null);
+
+  useEffect(() => {
+    workerRef.current = new Worker('/documentWorker.js');
+    return () => {
+      workerRef.current?.terminate();
+      workerRef.current = null;
+    };
+  }, []);
 
   const capabilityRows = useMemo(() => getCapabilityRows(), []);
   const unsupportedReason = useMemo(() => {
@@ -54,7 +63,6 @@ const DocumentConverterTool: React.FC = () => {
   }, [file, targetFormat]);
 
   const resetState = () => {
-    // Cancel any in-flight conversion before clearing state to prevent stale result overwrite.
     abortRef.current?.abort();
     setFile(null);
     setStatus({ isProcessing: false, currentStep: '', progress: 0, resultBlob: undefined, error: undefined });
@@ -102,7 +110,6 @@ const DocumentConverterTool: React.FC = () => {
   const onStart = async () => {
     if (!file || unsupportedReason) return;
 
-    // Start a new conversion job and invalidate any previous in-flight job.
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -123,7 +130,9 @@ const DocumentConverterTool: React.FC = () => {
           if (activeJobIdRef.current !== jobId) return;
           setStatus(prev => ({ ...prev, progress, currentStep: step }));
         },
-        controller.signal
+        controller.signal,
+        undefined,
+        workerRef.current || undefined,
       );
 
       if (activeJobIdRef.current !== jobId) return;
@@ -168,8 +177,9 @@ const DocumentConverterTool: React.FC = () => {
       <div className="bg-[#0f172a] text-white rounded-[2rem] shadow-2xl overflow-hidden min-h-[600px] flex flex-col md:flex-row relative">
         <div className="w-full md:w-[36%] bg-gradient-to-b from-indigo-600 to-indigo-700 p-6 sm:p-8 flex flex-col gap-6">
           <div>
-            <h3 className="text-2xl sm:text-3xl font-black">Office ↔ PDF</h3>
-            <p className="text-indigo-100 mt-2 text-sm">Single-file conversion with clear compatibility guidance.</p>
+            <p className="text-sm uppercase tracking-wide text-indigo-100/80">Document Converter</p>
+            <h1 className="text-3xl sm:text-4xl font-black mt-2 leading-tight">Convert PDF, Word, Excel, and PowerPoint</h1>
+            <p className="text-indigo-100/90 mt-3 text-sm">Use one file at a time for predictable quality and compatibility guidance.</p>
           </div>
 
           <div className="space-y-2">

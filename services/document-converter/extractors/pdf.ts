@@ -31,10 +31,12 @@ export const extractPdfPages = async (file: File, options: PdfExtractOptions = {
     throwIfAborted(signal);
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-    const lines = groupItemsIntoLines((content.items || []) as PdfTextItem[]);
+    const groupedLines = groupItemsIntoLines((content.items || []) as PdfTextItem[]);
+    const lines = groupedLines.map((line) => line.text);
 
     pages.push({
       lines,
+      lineMeta: groupedLines,
       flatText: lines.join('\n') || `(Page ${i} had no extractable text)`,
     });
 
