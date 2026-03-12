@@ -1,6 +1,6 @@
 import { runDocumentConversion } from './document-converter/pipeline';
 import { ConversionExecutor, DocumentConversionItem, DocumentTargetFormat } from './document-converter/types';
-import { detectDocumentFamily, getUnsupportedPairReason as getUnsupportedPairReasonInternal } from './document-converter/validators';
+import { getUnsupportedPairReason as getUnsupportedPairReasonInternal } from './document-converter/validators';
 
 export type { DocumentTargetFormat, DocumentConversionItem };
 
@@ -15,7 +15,7 @@ export const getCapabilityRows = () => [
   { pair: 'PDF → DOCX', status: 'Supported', note: 'Basic text extraction with size-based heading inference.' },
   { pair: 'PDF → XLSX', status: 'Supported', note: 'Local column/table inference is applied where possible.' },
   { pair: 'PDF → PPTX', status: 'Supported', note: 'One slide per source page with extracted text.' },
-  { pair: 'DOCX/XLSX/PPTX → PDF', status: 'Supported', note: 'Text-first conversion to PDF.' },
+  { pair: 'DOCX/XLSX/PPTX → PDF', status: 'Supported', note: 'DOCX keeps basic paragraph/list structure via HTML extraction.' },
   { pair: 'Office → Office', status: 'Supported', note: 'Uses an automatic Office → PDF → Office bridge.' },
 ] as const;
 
@@ -77,16 +77,7 @@ export const convertDocument = async (
   item: DocumentConversionItem,
   onProgress: (progress: number, step: string) => void,
   signal?: AbortSignal,
-  executor?: ConversionExecutor,
-  worker?: Worker
+  executor?: ConversionExecutor
 ) => {
-  const sourceFamily = detectDocumentFamily(item.file.type, item.file.name);
-  const targetFamily = detectDocumentFamily(item.targetFormat);
-  const canUseLegacyWorker = sourceFamily !== 'unknown' && targetFamily !== 'unknown' && (sourceFamily === 'pdf' || targetFamily === 'pdf') && targetFamily !== 'docx';
-
-  if (worker && canUseLegacyWorker) {
-    return convertDocumentInWorker(item, onProgress, signal, worker);
-  }
-
   return runDocumentConversion(item, { onProgress, signal, executor });
 };

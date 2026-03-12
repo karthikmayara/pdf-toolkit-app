@@ -46,16 +46,6 @@ const DocumentConverterTool: React.FC = () => {
   const inputRef = useRef<HTMLInputElement>(null);
   const activeJobIdRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
-  const workerRef = useRef<Worker | null>(null);
-
-  useEffect(() => {
-    workerRef.current = new Worker('/documentWorker.js');
-    return () => {
-      workerRef.current?.terminate();
-      workerRef.current = null;
-    };
-  }, []);
-
   const capabilityRows = useMemo(() => getCapabilityRows(), []);
   const unsupportedReason = useMemo(() => {
     if (!file) return null;
@@ -132,7 +122,6 @@ const DocumentConverterTool: React.FC = () => {
         },
         controller.signal,
         undefined,
-        workerRef.current || undefined,
       );
 
       if (activeJobIdRef.current !== jobId) return;
