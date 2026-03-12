@@ -51,9 +51,9 @@ const getRouteForTool = (toolId: ToolType): string | null => {
 };
 
 const RELEASE_NOTES = {
-  version: 'v3.1.2',
+  version: 'v3.1.3',
   notes: [
-    'Added Office→Office routing through an automatic Office→PDF→Office',
+    'Support Office→Office bridging, add PDF line metadata and font-size-based heading inference, and improve DOCX extraction and UI copy',
   ]
 };
 
