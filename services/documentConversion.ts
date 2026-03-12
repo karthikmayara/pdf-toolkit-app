@@ -23,6 +23,56 @@ export const getUnsupportedPairReason = (sourceMime: string, targetMime: Documen
   return getUnsupportedPairReasonInternal(sourceMime, targetMime, sourceName);
 };
 
+const convertDocumentInWorker = (
+  item: DocumentConversionItem,
+  onProgress: (progress: number, step: string) => void,
+  signal: AbortSignal | undefined,
+  worker: Worker
+): Promise<{ blob: Blob; filename: string }> => {
+  return new Promise((resolve, reject) => {
+    const handleMessage = (event: MessageEvent) => {
+      const { type, payload } = event.data || {};
+      if (type === 'progress') {
+        onProgress(payload?.progress || 0, payload?.step || 'Working...');
+        return;
+      }
+
+      cleanup();
+
+      if (type === 'done') {
+        const blob = new Blob([payload.buffer], { type: payload.mimeType || item.targetFormat });
+        resolve({ blob, filename: payload.filename || 'converted-file' });
+        return;
+      }
+
+      if (type === 'error') {
+        reject(new Error(payload?.message || 'Conversion failed.'));
+      }
+    };
+
+    const handleError = () => {
+      cleanup();
+      reject(new Error('Conversion worker failed.'));
+    };
+
+    const handleAbort = () => {
+      cleanup();
+      reject(new Error('Conversion cancelled.'));
+    };
+
+    const cleanup = () => {
+      worker.removeEventListener('message', handleMessage);
+      worker.removeEventListener('error', handleError);
+      signal?.removeEventListener('abort', handleAbort);
+    };
+
+    worker.addEventListener('message', handleMessage);
+    worker.addEventListener('error', handleError);
+    signal?.addEventListener('abort', handleAbort, { once: true });
+    worker.postMessage({ type: 'convert', payload: item });
+  });
+};
+
 export const convertDocument = async (
   item: DocumentConversionItem,
   onProgress: (progress: number, step: string) => void,

@@ -51,9 +51,9 @@ const getRouteForTool = (toolId: ToolType): string | null => {
 };
 
 const RELEASE_NOTES = {
-  version: 'v3.1.1',
+  version: 'v3.1.2',
   notes: [
-    'Add Office ↔ PDF Document Converter with worker-based processing',
+    'Added Office→Office routing through an automatic Office→PDF→Office',
   ]
 };
 
